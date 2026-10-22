@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+
+    <!--
+      net10.0 is the current LTS release of .NET. The "-windows10.0.19041.0" suffix makes the WinRT APIs
+      (Windows.Media.Control, used for Spotify / media) available directly, without any NuGet package.
+      Still on the .NET 8 SDK? Change "net10.0" to "net8.0": the code is compatible with both.
+    -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <!-- The global media-session API needs Windows 10 1809 (build 17763) or newer. -->
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>DynamicIsland</RootNamespace>
+    <AssemblyName>DynamicIsland</AssemblyName>
+    <Version>1.0.0</Version>
+    <Product>Dynamic Island for Windows</Product>
+    <Description>A lightweight, native Dynamic Island for Windows: now playing, volume, battery and clock.</Description>
+    <Authors>Celestyn Aurelixia</Authors>
+    <Copyright>Copyright © 2026 Celestyn Aurelixia</Copyright>
+
+    <!-- ===== Low-memory runtime tuning ===== -->
+    <!-- No background GC thread: a small, mostly idle UI app gains nothing from concurrent GC. -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <!-- Skip dynamic-PGO instrumentation; it only costs memory in an app that is idle most of the time. -->
+    <TieredPGO>false</TieredPGO>
+    <!-- Ship English framework resources only (smaller output folder). -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Inter (SIL Open Font License): a free, embeddable look-alike of Apple's San Francisco font. -->
+    <Resource Include="Fonts\*.ttf" />
+    <!-- The OFL requires the licence to travel with the font. -->
+    <None Include="Fonts\Inter-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

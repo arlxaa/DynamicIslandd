@@ -1,0 +1,7 @@
+# Normalise line endings in the repository; Git converts them for your platform on checkout.
+* text=auto
+
+# Binary assets
+*.png binary
+*.ico binary
+*.ttf binary
