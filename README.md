@@ -58,15 +58,25 @@ The island sits at the top center of your main screen and changes shape dependin
 
 ## Requirements
 
-- Windows 10 version 1809 or later, or Windows 11
-- To run it: the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)
+- Windows 10 version 1809 or later, or Windows 11 (64-bit)
 - To build it: the .NET 10 SDK, or Visual Studio 2026 with the **.NET desktop development** workload
 
 ## Install
 
 ### Download
 
-Prebuilt versions are published on the [Releases](../../releases) page. Unzip anywhere and run `DynamicIsland.exe`.
+Get the latest version from the [Releases](../../releases) page. There are two zips with the same app inside:
+
+| Download | Size | Needs |
+|---|---|---|
+| `DynamicIsland-…-win-x64.zip` | ~7 MB | The free [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0). If it's missing, Windows offers to install it on the first launch |
+| `DynamicIsland-…-win-x64-standalone.zip` | ~76 MB | Nothing: .NET is included |
+
+1. Unzip it anywhere, for example `C:\Apps\DynamicIsland`.
+2. Run `DynamicIsland.exe`.
+3. Right-click the island and choose **Start with Windows**.
+
+If you move the folder later, run the exe from its new location and turn **Start with Windows** on again.
 
 ### Build from source
 
@@ -83,15 +93,18 @@ Prebuilt versions are published on the [Releases](../../releases) page. Unzip an
 dotnet run -c Release
 ```
 
-**Portable build** to copy to another PC:
+**Release builds**, the same two single-exe builds as on the Releases page:
 
 ```powershell
-dotnet publish -c Release -r win-x64 --self-contained false -p:PublishReadyToRun=true -o publish
+# Small: needs the .NET 10 Desktop Runtime on the target PC
+dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish\small
+
+# Standalone: .NET included, nothing to install
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishReadyToRun=true -o publish\standalone
 ```
 
-The target PC needs the .NET 10 Desktop Runtime. To skip that, add
-`--self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true` for a single,
-larger exe.
+> Don't add `PublishReadyToRun` to the small build: in testing, ReadyToRun combined with a framework-dependent
+> single-file build crashed at startup.
 
 > The code uses nothing specific to .NET 10. To build on an older SDK, change `net10.0` to `net8.0` in
 > `DynamicIsland.csproj`.

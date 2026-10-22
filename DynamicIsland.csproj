@@ -39,4 +39,12 @@
     <None Include="Fonts\Inter-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      When publishing with PublishReadyToRun, skip the 25 MB Windows SDK projection: precompiling it would add
+      tens of MB to the download while the app only uses a handful of its types.
+    -->
+    <PublishReadyToRunExclude Include="Microsoft.Windows.SDK.NET.dll" />
+  </ItemGroup>
+
 </Project>
