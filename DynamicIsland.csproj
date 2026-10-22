@@ -17,9 +17,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>DynamicIsland</RootNamespace>
     <AssemblyName>DynamicIsland</AssemblyName>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <Product>Dynamic Island for Windows</Product>
-    <Description>A lightweight, native Dynamic Island for Windows: now playing, volume, battery and clock.</Description>
+    <Description>A lightweight, native Dynamic Island for Windows: now playing, timer, to-do list, volume, battery and clock.</Description>
     <Authors>Celestyn Aurelixia</Authors>
     <Copyright>Copyright © 2026 Celestyn Aurelixia</Copyright>
 
@@ -31,6 +31,11 @@
     <!-- Ship English framework resources only (smaller output folder). -->
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- MainWindow.Timer.cs and MainWindow.Todos.cs are parts of MainWindow: show them under MainWindow.xaml in Visual Studio. -->
+    <Compile Update="MainWindow.*.cs" DependentUpon="MainWindow.xaml" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Inter (SIL Open Font License): a free, embeddable look-alike of Apple's San Francisco font. -->

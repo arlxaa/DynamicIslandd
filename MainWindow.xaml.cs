@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -15,17 +16,23 @@ namespace DynamicIsland;
 
 /// <summary>
 /// The island: a borderless, transparent, always-on-top window whose only visible part is a black shape that
-/// morphs between three states.
+/// morphs between states.
 /// <list type="bullet">
-/// <item><b>Dot</b>: idle, when nothing is playing and there is nothing to announce.</item>
-/// <item><b>Compact</b>: a pill with one live activity (now playing, a volume change, or the charger being plugged in).</item>
-/// <item><b>Expanded</b>: on hover or click, a card with clock, date, battery, weather and full media controls.</item>
+/// <item><b>Dot</b>: idle, when nothing is going on.</item>
+/// <item><b>Compact</b>: a pill with a live activity (now playing, a running timer, a volume change, the charger being plugged in).</item>
+/// <item><b>Expanded</b>: on hover or click, a card with three pages (now playing, timer, to-do) under a shared header.</item>
+/// <item><b>Alert</b> and <b>menu</b>: "Timer done", and the menu you get with a right-click.</item>
 /// </list>
 /// Everything is event-driven. The only always-on timer fires once per minute for the clock.
+/// This file holds the state machine and the window plumbing; the timer and the to-do list live in
+/// MainWindow.Timer.cs and MainWindow.Todos.cs.
 /// </summary>
 public partial class MainWindow : Window
 {
     private enum Hud { None, Volume, Charging }
+
+    /// <summary>The expanded card's pages, in tab order.</summary>
+    private enum Page { Media, Timer, Todo }
 
     // ─────────────── Animation curves (frozen: shared by every animation at no cost) ───────────────
 
@@ -34,6 +41,13 @@ public partial class MainWindow : Window
     private static readonly IEasingFunction FadeCurve = Frozen(new QuadraticEase { EasingMode = EasingMode.EaseOut });
     private static readonly TimeSpan MorphDuration = TimeSpan.FromMilliseconds(560);
     private static readonly TimeSpan ShrinkToDotDuration = TimeSpan.FromMilliseconds(380);
+    private static readonly TimeSpan SlideDuration = TimeSpan.FromMilliseconds(420);  // tab thumb, switch knob
+
+    /// <summary>Width of one page tab in the header (see the TabButton style).</summary>
+    private const double TabWidth = 32;
+
+    /// <summary>Hovering again this soon after the island collapsed reopens the page you were on.</summary>
+    private static readonly TimeSpan StickyPageWindow = TimeSpan.FromSeconds(10);
 
     // ─────────────── Services (each one releases its OS hooks in Dispose) ───────────────
 
@@ -60,19 +74,27 @@ public partial class MainWindow : Window
 
     // ─────────────── What the island shows (inputs of ChooseView) ───────────────
 
-    private bool _expanded;              // the user is hovering over or has clicked the island
-    private Hud _hud = Hud.None;         // a transient announcement is up
-    private bool _showMediaPill;         // music is playing (or was paused only moments ago)
-    private bool _hiddenForFullscreen;   // a fullscreen app is in front: stay out of the way
+    private bool _expanded;                // the user is hovering over or has clicked the island
+    private Page _page = Page.Media;       // the expanded card's current page
+    private bool _menuOpen;                // the right-click menu is up (it counts as expanded)
+    private Hud _hud = Hud.None;           // a transient announcement is up
+    private bool _showMediaPill;           // music is playing (or was paused only moments ago)
+    private bool _fullscreenInFront;       // a fullscreen app is in front...
+    private bool _hiddenForFullscreen;     // ...so the island stays out of the way (unless a timer is ringing)
     private FrameworkElement? _activeView; // null = dot
     private readonly FrameworkElement[] _views;
+    private readonly FrameworkElement[] _pageViews;  // the expanded pages, which share the header
+    private DateTime _collapsedAt = DateTime.MinValue;
 
     // ─────────────── Misc ───────────────
 
     private readonly SolidColorBrush _accentBrush = new(Colors.White);
     private Color _accentTarget = Colors.White;
     private readonly RectangleGeometry _stageClip = new();
-    private readonly Brush _greenBrush, _redBrush, _yellowBrush;
+    private readonly Brush _greenBrush, _redBrush, _yellowBrush, _orangeBrush, _switchOffBrush;
+    private readonly Button[] _tabs;
+    private bool _headerShown;
+    private bool _headerClockShown = true;
     private Storyboard? _equalizer;
     private bool _equalizerRunning;
     private int _minutesSinceWeather;
@@ -83,10 +105,18 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
-        _views = new FrameworkElement[] { CompactMediaView, VolumeHudView, ChargingHudView, ExpandedMediaView, ExpandedIdleView };
+        _views = new FrameworkElement[]
+        {
+            CompactMediaView, CompactTimerView, VolumeHudView, ChargingHudView, TimerAlertView, MenuView,
+            ExpandedMediaView, ExpandedIdleView, TimerSetupView, TimerRunningView, TodoView,
+        };
+        _pageViews = new FrameworkElement[] { ExpandedMediaView, ExpandedIdleView, TimerSetupView, TimerRunningView, TodoView };
+        _tabs = new[] { MediaTab, TimerTab, TodoTab };
         _greenBrush = (Brush)FindResource("GreenBrush");
         _redBrush = (Brush)FindResource("RedBrush");
         _yellowBrush = (Brush)FindResource("YellowBrush");
+        _orangeBrush = (Brush)FindResource("OrangeBrush");
+        _switchOffBrush = (Brush)FindResource("SwitchOffBrush");
 
         // One animatable brush, tinted with the album art's colour, shared by the equalizer and the progress bar.
         // It is assigned as a local value on purpose: WPF may freeze brushes that are shared through resource
@@ -99,6 +129,13 @@ public partial class MainWindow : Window
         Stage.SizeChanged += OnStageSizeChanged;
         if (IslandConfig.HoverPadding <= 0)
             HitZone.Background = Brushes.Transparent; // only the visible island catches the mouse
+
+        // What the island remembers between runs: the to-do list and a running timer.
+        SavedState saved = StateStore.Load();
+        InitializeTodos(saved);
+        InitializeTimer(saved);
+        Version? version = typeof(MainWindow).Assembly.GetName().Version;
+        VersionText.Text = version is null ? "" : "v" + version.ToString(3);
 
         _media = new MediaService(Dispatcher, IslandConfig.MediaSource);
         _media.Changed += OnMediaChanged;
@@ -114,6 +151,7 @@ public partial class MainWindow : Window
 
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
+        Deactivated += OnDeactivated;
         Closed += OnClosed;
     }
 
@@ -124,7 +162,8 @@ public partial class MainWindow : Window
         _hwnd = new WindowInteropHelper(this).Handle;
 
         // Tool window: not in Alt+Tab or the taskbar, and shown on every virtual desktop.
-        // No-activate: clicking the island never steals keyboard focus from the app you are working in.
+        // No-activate: clicking the island never steals keyboard focus from the app you are working in
+        // (the to-do box asks for focus explicitly, and only while you type).
         int exStyle = NativeMethods.GetWindowLong(_hwnd, NativeMethods.GWL_EXSTYLE);
         exStyle = (exStyle | NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE) & ~NativeMethods.WS_EX_APPWINDOW;
         NativeMethods.SetWindowLong(_hwnd, NativeMethods.GWL_EXSTYLE, exStyle);
@@ -144,6 +183,8 @@ public partial class MainWindow : Window
         ScheduleNextMinuteTick();
         _minuteTimer.Start();
         ApplyBattery(_power.Current);
+        UpdateTabs();
+        UpdatePresentation(); // a timer restored from the last run shows its pill right away
         if (IslandConfig.HideWhenFullscreen)
             _fullscreenTimer.Start();
 
@@ -158,6 +199,8 @@ public partial class MainWindow : Window
 
     private void OnClosed(object? sender, EventArgs e)
     {
+        SaveState();
+
         // Stop every timer and detach every OS hook, so nothing keeps running or holds references after exit.
         _minuteTimer.Stop();
         _minuteTimer.Tick -= OnMinuteTick;
@@ -171,6 +214,8 @@ public partial class MainWindow : Window
         _trimTimer.Dispose();
         if (_equalizerRunning)
             _equalizer?.Stop(this);
+        DisposeTimer();
+        DisposeTodos();
 
         _media.Changed -= OnMediaChanged;
         _media.Dispose();
@@ -181,6 +226,7 @@ public partial class MainWindow : Window
         _weather?.Dispose();
 
         Stage.SizeChanged -= OnStageSizeChanged;
+        Deactivated -= OnDeactivated;
         _hwndSource?.RemoveHook(WndProc);
         _hwndSource = null;
     }
@@ -238,22 +284,43 @@ public partial class MainWindow : Window
         Top = Math.Round(topLeft.Y);
     }
 
+    /// <summary>Writes the to-dos and the timer to disk. Called after every change you make.</summary>
+    private void SaveState() => StateStore.Save(new SavedState
+    {
+        Todos = _todos.Select(todo => new SavedTodo(todo.Text, todo.IsDone)).ToList(),
+        Timer = _timer.Save(),
+        LastTimerMinutes = _timerMinutes,
+    });
+
     // ═══════════════════════════════ State → presentation ═══════════════════════════════
 
     /// <summary>
-    /// The single source of truth for what the island shows. Priority: expanded (the user is looking) →
-    /// HUD (something just changed) → now playing → dot.
+    /// The single source of truth for what the island shows. Priority: a ringing timer (it needs you) →
+    /// the menu → expanded (the user is looking) → HUD (something just changed) → now playing → timer → dot.
     /// </summary>
     private FrameworkElement? ChooseView()
     {
+        if (_timer.Phase == TimerPhase.Ringing)
+            return TimerAlertView;
+        if (_menuOpen)
+            return MenuView;
         if (_expanded)
-            return _media.Current is null ? ExpandedIdleView : ExpandedMediaView;
+        {
+            return _page switch
+            {
+                Page.Timer => _timer.IsActive ? TimerRunningView : TimerSetupView,
+                Page.Todo => TodoView,
+                _ => _media.Current is null ? ExpandedIdleView : ExpandedMediaView,
+            };
+        }
         if (_hud == Hud.Volume)
             return VolumeHudView;
         if (_hud == Hud.Charging)
             return ChargingHudView;
         if (_showMediaPill && _media.Current is not null)
-            return CompactMediaView;
+            return CompactMediaView; // with a running timer, the pill shows its countdown as well
+        if (_timer.IsActive)
+            return CompactTimerView;
         return null;
     }
 
@@ -262,8 +329,9 @@ public partial class MainWindow : Window
         FrameworkElement? view = ChooseView();
         if (view != _activeView)
         {
+            FrameworkElement? previous = _activeView;
             _activeView = view;
-            MorphTo(view);
+            MorphTo(previous, view);
         }
         UpdateEqualizer();
         UpdateProgressTimer();
@@ -274,12 +342,12 @@ public partial class MainWindow : Window
     /// Animations start from the current animated value (HandoffBehavior.SnapshotAndReplace), so a morph that
     /// interrupts another one continues smoothly from wherever the island is.
     /// </summary>
-    private void MorphTo(FrameworkElement? view)
+    private void MorphTo(FrameworkElement? previous, FrameworkElement? view)
     {
         double width = view?.Width ?? IslandConfig.DotSize;
-        double height = view?.Height ?? IslandConfig.DotSize;
+        double height = view == TodoView ? PrepareTodoView() : view?.Height ?? IslandConfig.DotSize;
 
-        // A spring when growing or switching pills; a plain ease into the dot, because a spring
+        // A spring when growing or switching shapes; a plain ease into the dot, because a spring
         // would undershoot the tiny target size (and a negative size is invalid).
         bool toDot = view is null;
         IEasingFunction curve = toDot ? SettleCurve : SpringCurve;
@@ -288,24 +356,50 @@ public partial class MainWindow : Window
         Island.BeginAnimation(WidthProperty, new DoubleAnimation(width, duration) { EasingFunction = curve });
         Island.BeginAnimation(HeightProperty, new DoubleAnimation(height, duration) { EasingFunction = curve });
 
+        // Switching pages keeps the header in place and only nudges the new content, instead of popping it in.
+        bool pageSwitch = IsPage(previous) && IsPage(view);
         foreach (FrameworkElement v in _views)
         {
             bool show = ReferenceEquals(v, view);
             v.IsHitTestVisible = show;
-
-            // Outgoing content fades fast; incoming content waits until the shape has mostly formed.
-            v.BeginAnimation(OpacityProperty, new DoubleAnimation(show ? 1 : 0, TimeSpan.FromMilliseconds(show ? 240 : 110))
-            {
-                BeginTime = show ? TimeSpan.FromMilliseconds(120) : TimeSpan.Zero,
-                EasingFunction = FadeCurve,
-            });
+            v.BeginAnimation(OpacityProperty, Fade(show));
 
             if (show && v.RenderTransform is ScaleTransform scale)
             {
-                var grow = new DoubleAnimation(0.9, 1, duration) { EasingFunction = SpringCurve };
+                var grow = new DoubleAnimation(pageSwitch ? 0.96 : 0.9, 1, duration) { EasingFunction = SpringCurve };
                 scale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
                 scale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
             }
+        }
+
+        ShowHeader(IsPage(view), showClock: view != ExpandedIdleView);
+    }
+
+    /// <summary>Outgoing content fades fast; incoming content waits until the shape has mostly formed.</summary>
+    private static DoubleAnimation Fade(bool show) => new(show ? 1 : 0, TimeSpan.FromMilliseconds(show ? 240 : 110))
+    {
+        BeginTime = show ? TimeSpan.FromMilliseconds(120) : TimeSpan.Zero,
+        EasingFunction = FadeCurve,
+    };
+
+    private bool IsPage(FrameworkElement? view) => view is not null && Array.IndexOf(_pageViews, view) >= 0;
+
+    /// <summary>
+    /// The header (clock, tabs, battery) is shared by the expanded pages, so it only fades when the card opens or
+    /// closes. Its clock steps aside on the "nothing playing" page, which shows a big clock instead.
+    /// </summary>
+    private void ShowHeader(bool show, bool showClock)
+    {
+        if (show != _headerShown)
+        {
+            _headerShown = show;
+            PageHeader.IsHitTestVisible = show;
+            PageHeader.BeginAnimation(OpacityProperty, Fade(show));
+        }
+        if (showClock != _headerClockShown)
+        {
+            _headerClockShown = showClock;
+            HeaderClockPanel.BeginAnimation(OpacityProperty, Fade(showClock));
         }
     }
 
@@ -329,15 +423,68 @@ public partial class MainWindow : Window
             _hud = Hud.None; // the full card already shows everything a HUD would
             _hudTimer.Cancel();
             _trimTimer.Cancel();
+            SetPage(PageForExpansion(), animate: false);
         }
-        else if (IslandConfig.TrimMemoryWhenIdle)
+        else
         {
-            _trimTimer.Schedule(TimeSpan.FromSeconds(30), TrimMemory);
+            _menuOpen = false;
+            EndTyping(restoreFocus: true);
+            _collapsedAt = DateTime.UtcNow;
+            if (IslandConfig.TrimMemoryWhenIdle)
+                _trimTimer.Schedule(TimeSpan.FromSeconds(30), TrimMemory);
         }
 
         UpdatePresentation();
         if (expanded)
             UpdateProgress();
+    }
+
+    /// <summary>
+    /// The page to open: the one you were just on if you come straight back; otherwise the activity the pill is
+    /// showing (the timer, or now playing); otherwise the page you used last.
+    /// </summary>
+    private Page PageForExpansion()
+    {
+        if (DateTime.UtcNow - _collapsedAt < StickyPageWindow)
+            return _page;
+        if (_activeView == CompactTimerView)
+            return Page.Timer;
+        if (_activeView == CompactMediaView)
+            return Page.Media;
+        return _page;
+    }
+
+    private void OnTabClick(object sender, RoutedEventArgs e)
+        => SetPage(sender == TimerTab ? Page.Timer : sender == TodoTab ? Page.Todo : Page.Media, animate: true);
+
+    private void SetPage(Page page, bool animate)
+    {
+        if (page != _page)
+        {
+            if (_page == Page.Todo)
+                EndTyping(restoreFocus: true);
+            _page = page;
+            UpdateTabs();
+        }
+        if (page == Page.Todo)
+            SortTodos(); // finished to-dos sink below the open ones whenever the list comes into view
+        if (animate)
+            UpdatePresentation();
+    }
+
+    /// <summary>Slides the tab thumb to the current page and highlights its icon.</summary>
+    private void UpdateTabs()
+    {
+        int selected = (int)_page;
+        TabThumbOffset.BeginAnimation(TranslateTransform.XProperty,
+            new DoubleAnimation(selected * TabWidth, SlideDuration) { EasingFunction = SpringCurve });
+        for (int i = 0; i < _tabs.Length; i++)
+        {
+            if (i == selected)
+                _tabs[i].Opacity = 1;
+            else
+                _tabs[i].ClearValue(OpacityProperty); // back to the style's dimmed / hover values
+        }
     }
 
     private void ShowHud(Hud hud, TimeSpan duration)
@@ -353,12 +500,15 @@ public partial class MainWindow : Window
         UpdatePresentation();
     }
 
-    /// <summary>The bars only animate while music plays and a media view is on screen. Otherwise no frames are rendered at all.</summary>
+    /// <summary>
+    /// The bars only animate while music plays and they are on screen (in the compact pill a running timer's
+    /// countdown takes their place). Otherwise no frames are rendered at all.
+    /// </summary>
     private void UpdateEqualizer()
     {
         bool run = !_hiddenForFullscreen
                    && _media.Current is { IsPlaying: true }
-                   && (_activeView == CompactMediaView || _activeView == ExpandedMediaView);
+                   && (_activeView == ExpandedMediaView || (_activeView == CompactMediaView && !_timer.IsActive));
         if (run == _equalizerRunning || _equalizer is null)
             return;
 
@@ -381,65 +531,73 @@ public partial class MainWindow : Window
 
     private void OnHitZoneMouseLeave(object sender, MouseEventArgs e)
     {
-        if (_expanded)
+        if (_expanded && !_typing)
             _hoverTimer.Schedule(IslandConfig.HoverCollapseDelay, () => SetExpanded(false));
-        else
+        else if (!_expanded)
             _hoverTimer.Cancel(); // passed over the island without stopping
     }
 
     private void OnHitZoneLeftClick(object sender, MouseButtonEventArgs e)
     {
-        // Click (or tap, on touch screens) toggles. Buttons inside the island handle their own clicks,
-        // so this only fires for the island's background.
+        // Buttons inside the island handle their own clicks, so this only fires for its background.
         _hoverTimer.Cancel();
-        SetExpanded(!_expanded);
+        if (_timer.Phase == TimerPhase.Ringing)
+            _timer.Stop();              // a click on the alert dismisses it
+        else if (_menuOpen)
+            CloseMenu();
+        else if (!_expanded)
+            SetExpanded(true);          // a click (or a tap on a touch screen) opens it; moving away closes it
     }
 
     private void OnHitZoneRightClick(object sender, MouseButtonEventArgs e)
     {
         e.Handled = true;
-        ShowContextMenu();
+        // No menu over a ringing timer (it would only appear after you stop it) or inside the to-do box.
+        if (_timer.Phase != TimerPhase.Ringing && !TodoInput.IsMouseOver)
+            OpenMenu();
     }
 
-    /// <summary>A native Win32 menu: Windows 11 styling for free, and none of the focus quirks of WPF popups in a no-activate window.</summary>
-    private void ShowContextMenu()
+    // ═══════════════════════════════ Menu ═══════════════════════════════
+
+    /// <summary>The right-click menu lives inside the island itself, in the same type and style as everything else.</summary>
+    private void OpenMenu()
     {
-        const int StartupItem = 1, ExitItem = 2;
+        _hoverTimer.Cancel();
+        EndTyping(restoreFocus: true);
+        SetStartupSwitch(StartupManager.IsEnabled, animate: false);
+        _menuOpen = true;
+        if (_expanded)
+            UpdatePresentation();
+        else
+            SetExpanded(true); // collapses again like the card when the pointer leaves
+    }
 
-        IntPtr menu = NativeMethods.CreatePopupMenu();
-        if (menu == IntPtr.Zero)
-            return;
-        try
+    private void CloseMenu()
+    {
+        _menuOpen = false;
+        UpdatePresentation();
+    }
+
+    private void OnStartupToggleClick(object sender, RoutedEventArgs e)
+    {
+        StartupManager.IsEnabled = !StartupManager.IsEnabled;
+        SetStartupSwitch(StartupManager.IsEnabled, animate: true); // read back: shows the truth if the change failed
+    }
+
+    private void OnQuitClick(object sender, RoutedEventArgs e) => Close();
+
+    private void SetStartupSwitch(bool on, bool animate)
+    {
+        StartupSwitch.Background = on ? _greenBrush : _switchOffBrush;
+        double x = on ? StartupSwitch.Width - StartupSwitch.Height : 0; // knob travel = track width − track height
+        if (animate)
         {
-            NativeMethods.AppendMenu(menu, NativeMethods.MF_STRING | (StartupManager.IsEnabled ? NativeMethods.MF_CHECKED : 0), StartupItem, "Start with Windows");
-            NativeMethods.AppendMenu(menu, NativeMethods.MF_SEPARATOR, 0, null);
-            NativeMethods.AppendMenu(menu, NativeMethods.MF_STRING, ExitItem, "Exit Dynamic Island");
-
-            NativeMethods.GetCursorPos(out NativeMethods.POINT cursor);
-            IntPtr previousForeground = NativeMethods.GetForegroundWindow();
-
-            // A popup menu only closes properly on an outside click when its owner is in the foreground (KB135788).
-            NativeMethods.SetForegroundWindow(_hwnd);
-            int command = NativeMethods.TrackPopupMenuEx(menu, NativeMethods.TPM_RETURNCMD | NativeMethods.TPM_RIGHTBUTTON, cursor.X, cursor.Y, _hwnd, IntPtr.Zero);
-            NativeMethods.PostMessage(_hwnd, NativeMethods.WM_NULL, IntPtr.Zero, IntPtr.Zero);
-
-            switch (command)
-            {
-                case StartupItem:
-                    StartupManager.IsEnabled = !StartupManager.IsEnabled;
-                    break;
-                case ExitItem:
-                    Close();
-                    return;
-            }
-
-            // Give focus back to the app you were using (unless you already clicked somewhere else).
-            if (NativeMethods.GetForegroundWindow() == _hwnd && previousForeground != IntPtr.Zero)
-                NativeMethods.SetForegroundWindow(previousForeground);
+            StartupSwitchKnob.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(x, SlideDuration) { EasingFunction = SpringCurve });
         }
-        finally
+        else
         {
-            NativeMethods.DestroyMenu(menu);
+            StartupSwitchKnob.BeginAnimation(TranslateTransform.XProperty, null);
+            StartupSwitchKnob.X = x;
         }
     }
 
@@ -532,6 +690,7 @@ public partial class MainWindow : Window
         RemainingText.Text = "-" + FormatTime(duration - position);
     }
 
+    /// <summary>"4:59" or, from an hour up, "1:04:59" (track positions and the timer).</summary>
     private static string FormatTime(TimeSpan t)
         => t.ToString(t.TotalHours >= 1 ? @"h\:mm\:ss" : @"m\:ss", CultureInfo.InvariantCulture);
 
@@ -545,7 +704,7 @@ public partial class MainWindow : Window
 
     private void OnArtworkClick(object sender, MouseButtonEventArgs e)
     {
-        e.Handled = true; // don't let the click reach the island and collapse it
+        e.Handled = true; // the click is the artwork's, not the island's
         if (_media.Current?.IsSpotify == true)
             OpenSpotify();
     }
@@ -593,28 +752,21 @@ public partial class MainWindow : Window
 
     private void ApplyBattery(BatteryStatus battery)
     {
-        Visibility visibility = battery.HasBattery ? Visibility.Visible : Visibility.Collapsed; // desktops: no battery UI
-        MediaBatteryPanel.Visibility = visibility;
-        IdleBatteryPanel.Visibility = visibility;
+        HeaderBatteryPanel.Visibility = battery.HasBattery ? Visibility.Visible : Visibility.Collapsed; // desktops: no battery UI
         if (!battery.HasBattery)
             return;
 
         string text = battery.Percent.ToString(CultureInfo.CurrentCulture) + "%";
-        MediaBatteryText.Text = text;
-        IdleBatteryText.Text = text;
+        HeaderBatteryText.Text = text;
         ChargingPercentText.Text = text;
 
-        Brush fill = battery.IsCharging || battery.IsPluggedIn ? _greenBrush
-                   : battery.Percent <= 20 ? _redBrush
-                   : battery.IsSaverOn ? _yellowBrush
-                   : Brushes.White;
         double level = battery.Percent / 100.0;
-        foreach (var icon in new[] { MediaBatteryIcon, IdleBatteryIcon })
-        {
-            icon.Level = level;
-            icon.Fill = fill;
-            icon.IsCharging = battery.IsCharging;
-        }
+        HeaderBatteryIcon.Level = level;
+        HeaderBatteryIcon.IsCharging = battery.IsCharging;
+        HeaderBatteryIcon.Fill = battery.IsCharging || battery.IsPluggedIn ? _greenBrush
+                               : battery.Percent <= 20 ? _redBrush
+                               : battery.IsSaverOn ? _yellowBrush
+                               : Brushes.White;
         ChargingBatteryIcon.Level = level;
     }
 
@@ -643,19 +795,20 @@ public partial class MainWindow : Window
     {
         DateTime now = DateTime.Now;
         CultureInfo culture = CultureInfo.CurrentCulture;
-        string monthDay = now.ToString(culture.DateTimeFormat.MonthDayPattern, culture);
-        string time = now.ToString("t", culture); // follows the 12/24-hour setting
+        string shortTime = culture.DateTimeFormat.ShortTimePattern; // follows the 12/24-hour setting
 
-        MediaClockText.Text = time;
-        MediaDateText.Text = now.ToString("ddd", culture) + ", " + monthDay;
-        IdleClockText.Text = time;
-        IdleDateText.Text = now.ToString("dddd", culture) + ", " + monthDay;
+        HeaderClockText.Text = now.ToString(shortTime, culture);
+        HeaderDateText.Text = now.ToString("ddd d", culture);
+        // The big clock leaves out AM/PM, like the iPhone's lock screen.
+        IdleClockText.Text = now.ToString(shortTime.Replace("tt", "").Replace("t", "").Trim(), culture);
+        IdleDateText.Text = now.ToString("dddd", culture) + ", " + now.ToString(culture.DateTimeFormat.MonthDayPattern, culture);
     }
 
     private void OnResumedFromSleep()
     {
         UpdateClock();
         ScheduleNextMinuteTick();
+        _timer.Refresh(); // a timer that ran out while the PC slept rings now
         if (_weather is not null)
             _ = RefreshWeatherAsync();
     }
@@ -667,29 +820,39 @@ public partial class MainWindow : Window
         _minutesSinceWeather = 0;
 
         WeatherInfo? weather = await _weather.GetCurrentAsync();
-        string compact = weather is null ? "" : $"{weather.Glyph} {weather.Temperature.ToString(CultureInfo.CurrentCulture)}°";
-        MediaWeatherText.Text = compact;
-        IdleWeatherText.Text = weather is null ? "" : $"{compact}  {weather.Description}";
-
         Visibility visibility = weather is null ? Visibility.Collapsed : Visibility.Visible;
-        MediaWeatherText.Visibility = visibility;
+        HeaderWeatherPanel.Visibility = visibility;
         IdleWeatherText.Visibility = visibility;
+        if (weather is null)
+            return;
+
+        HeaderWeatherIcon.Source = (ImageSource)FindResource("Weather." + weather.Kind);
+        HeaderWeatherText.Text = weather.Temperature.ToString(CultureInfo.CurrentCulture) + "°";
+        IdleWeatherText.Text = weather.Description;
     }
 
     // ═══════════════════════════════ Fullscreen & memory ═══════════════════════════════
 
     private void OnFullscreenTick(object? sender, EventArgs e)
     {
-        bool fullscreen = NativeMethods.IsFullscreenAppInForeground(_hwnd);
-        if (fullscreen == _hiddenForFullscreen)
+        _fullscreenInFront = NativeMethods.IsFullscreenAppInForeground(_hwnd);
+        UpdateFullscreenHiding();
+    }
+
+    /// <summary>Hides the island while a fullscreen app is in front, except when a finished timer needs your attention.</summary>
+    private void UpdateFullscreenHiding()
+    {
+        bool hide = _fullscreenInFront && _timer.Phase != TimerPhase.Ringing;
+        if (hide == _hiddenForFullscreen)
             return;
 
-        _hiddenForFullscreen = fullscreen;
-        if (fullscreen)
+        _hiddenForFullscreen = hide;
+        if (hide)
         {
             _hoverTimer.Cancel();
             _hudTimer.Cancel();
             _expanded = false;
+            _menuOpen = false;
             _hud = Hud.None;
         }
         else
@@ -700,8 +863,8 @@ public partial class MainWindow : Window
         }
 
         // Fully transparent and not hit-testable = invisible and 100 % click-through.
-        HitZone.IsHitTestVisible = !fullscreen;
-        HitZone.BeginAnimation(OpacityProperty, new DoubleAnimation(fullscreen ? 0 : 1, TimeSpan.FromMilliseconds(fullscreen ? 150 : 300)));
+        HitZone.IsHitTestVisible = !hide;
+        HitZone.BeginAnimation(OpacityProperty, new DoubleAnimation(hide ? 0 : 1, TimeSpan.FromMilliseconds(hide ? 150 : 300)));
         UpdatePresentation();
     }
 

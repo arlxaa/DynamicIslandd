@@ -3,4 +3,18 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              ShutdownMode="OnMainWindowClose">
     <!-- No StartupUri: App.OnStartup creates the window itself, after the single-instance check. -->
+
+    <Application.Resources>
+        <!--
+            One typeface for the whole app, used the way Apple uses San Francisco: the Text cut for sizes below
+            20 px and the Display cut from 20 px up. Every text in the island uses one of these two.
+
+            Apple's SF Pro is used when it is installed on this PC. Otherwise the bundled Inter and Inter Display
+            take over (Fonts\, SIL Open Font License): open-source look-alikes, because Apple's licence does not
+            allow SF Pro itself to be redistributed. Segoe UI is only a last resort for characters Inter lacks
+            (song titles in other scripts, for example).
+        -->
+        <FontFamily x:Key="TextFont">SF Pro Text, SF Pro, ./Fonts/#Inter, Segoe UI</FontFamily>
+        <FontFamily x:Key="DisplayFont">SF Pro Display, SF Pro, ./Fonts/#Inter Display, ./Fonts/#Inter, Segoe UI</FontFamily>
+    </Application.Resources>
 </Application>

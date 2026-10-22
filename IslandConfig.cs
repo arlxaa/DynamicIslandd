@@ -17,12 +17,33 @@ public static class IslandConfig
     public const double CompactWidth = 300;
     public const double CompactHeight = 36;
 
-    /// <summary>The card shown on hover or click.</summary>
-    public const double ExpandedWidth = 420;
-    public const double ExpandedMediaHeight = 200;   // with media controls
-    public const double ExpandedIdleHeight = 132;    // nothing playing: clock, date, battery, weather
+    /// <summary>The pill of a running timer when no music is playing: just a progress ring and the countdown.</summary>
+    public const double CompactTimerWidth = 236;
 
-    /// <summary>The pill and the dot are fully round; the expanded card's corners stop growing at this radius.</summary>
+    /// <summary>The card shown on hover or click. All its pages share this width and one header (clock, page tabs, battery).</summary>
+    public const double ExpandedWidth = 420;
+    public const double ExpandedMediaHeight = 204;   // now playing, with media controls
+    public const double ExpandedIdleHeight = 132;    // nothing playing: big clock and date
+    public const double TimerSetupHeight = 150;      // timer page: pick a duration
+    public const double TimerRunningHeight = 120;    // timer page: countdown with pause / cancel
+
+    /// <summary>The to-do page grows with the list, up to this many rows; longer lists scroll.</summary>
+    public const int TodoVisibleRows = 5;
+    public const double TodoRowHeight = 30;
+
+    /// <summary>Everything on the to-do page except the rows: the header, the "Add a to-do" box and padding.</summary>
+    public const double TodoChromeHeight = 102;
+    public const double TodoMaxHeight = TodoChromeHeight + TodoVisibleRows * TodoRowHeight;
+
+    /// <summary>The "Timer done" alert.</summary>
+    public const double TimerAlertWidth = 360;
+    public const double TimerAlertHeight = 68;
+
+    /// <summary>The menu you get with a right-click.</summary>
+    public const double MenuWidth = 280;
+    public const double MenuHeight = 93;
+
+    /// <summary>The pills and the dot are fully round; bigger shapes' corners stop growing at this radius.</summary>
     public const double MaxCornerRadius = 30;
 
     // ─────────────── Placement ───────────────
@@ -42,7 +63,7 @@ public static class IslandConfig
 
     public static readonly Thickness IslandMargin = new(HoverPadding, TopMargin, HoverPadding, HoverPadding);
     public static readonly double WindowWidth = ExpandedWidth + 2 * (HoverPadding + OvershootRoom);
-    public static readonly double WindowHeight = TopMargin + ExpandedMediaHeight + HoverPadding + OvershootRoom;
+    public static readonly double WindowHeight = TopMargin + Math.Max(ExpandedMediaHeight, TodoMaxHeight) + HoverPadding + OvershootRoom;
 
     // ─────────────── Behaviour ───────────────
 
@@ -64,13 +85,30 @@ public static class IslandConfig
     /// </summary>
     public static readonly TimeSpan PausedToDotDelay = TimeSpan.FromSeconds(5);
 
-    /// <summary>Fade the island out while a fullscreen app (game, video, F11 browser) is in front.</summary>
+    /// <summary>Fade the island out while a fullscreen app (game, video, F11 browser) is in front. A finished timer still shows.</summary>
     public static readonly bool HideWhenFullscreen = true;
     public static readonly TimeSpan FullscreenCheckInterval = TimeSpan.FromSeconds(1.5);
 
     // ─────────────── Media ───────────────
 
     public static readonly MediaSourceMode MediaSource = MediaSourceMode.PreferSpotify;
+
+    // ─────────────── Timer ───────────────
+
+    /// <summary>Quick picks on the timer page, in minutes. The − / + buttons and the mouse wheel set any other length.</summary>
+    public static readonly IReadOnlyList<int> TimerPresets = new[] { 1, 3, 5, 10, 15, 25, 30, 60 };
+
+    /// <summary>The longest timer you can set, in minutes.</summary>
+    public const int TimerMaxMinutes = 12 * 60;
+
+    /// <summary>
+    /// Sound for a finished timer, looped while the "Timer done" alert rings. Any .wav file works, and
+    /// environment variables are expanded. Leave it empty for a silent alert.
+    /// </summary>
+    public static readonly string TimerSound = @"%WINDIR%\Media\Alarm01.wav";
+
+    /// <summary>The sound stops after this long. The alert itself stays until you dismiss it.</summary>
+    public static readonly TimeSpan TimerSoundDuration = TimeSpan.FromSeconds(30);
 
     // ─────────────── Weather (optional) ───────────────
 

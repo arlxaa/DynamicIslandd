@@ -5,7 +5,10 @@ using System.Text.Json;
 
 namespace DynamicIsland.Services;
 
-public sealed record WeatherInfo(int Temperature, string Glyph, string Description);
+/// <summary>Which weather symbol to show. The symbols themselves are vector drawings in MainWindow.xaml ("Weather.Sun", …).</summary>
+public enum WeatherKind { Sun, Moon, CloudSun, CloudMoon, Cloud, Fog, Drizzle, Rain, Snow, Thunder }
+
+public sealed record WeatherInfo(int Temperature, WeatherKind Kind, string Description);
 
 /// <summary>
 /// Optional current weather from Open-Meteo (free, no API key, no account). The window only creates this
@@ -23,7 +26,7 @@ public sealed class WeatherService : IDisposable
     {
         _place = place;
         _fahrenheit = fahrenheit;
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("DynamicIsland/1.0");
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("DynamicIsland/1.1");
     }
 
     /// <summary>Returns null when offline or the place cannot be found; the island then simply hides the weather.</summary>
@@ -45,8 +48,8 @@ public sealed class WeatherService : IDisposable
             int code = current.GetProperty("weather_code").GetInt32();
             bool isDay = !current.TryGetProperty("is_day", out JsonElement day) || day.GetInt32() == 1;
 
-            var (glyph, description) = Describe(code, isDay);
-            return new WeatherInfo(temperature, glyph, description);
+            var (kind, description) = Describe(code, isDay);
+            return new WeatherInfo(temperature, kind, description);
         }
         catch (Exception ex)
         {
@@ -76,21 +79,21 @@ public sealed class WeatherService : IDisposable
             : null;
     }
 
-    /// <summary>WMO weather code → symbol + short text. The symbols come from Segoe UI Symbol, which ships with Windows.</summary>
-    private static (string Glyph, string Description) Describe(int code, bool isDay) => code switch
+    /// <summary>WMO weather code → symbol + short text.</summary>
+    private static (WeatherKind Kind, string Description) Describe(int code, bool isDay) => code switch
     {
-        0 => (isDay ? "☀" : "☾", "Clear"),
-        1 => (isDay ? "☀" : "☾", "Mostly clear"),
-        2 => ("⛅", "Partly cloudy"),
-        3 => ("☁", "Cloudy"),
-        45 or 48 => ("☁", "Fog"),
-        >= 51 and <= 57 => ("☂", "Drizzle"),
-        >= 61 and <= 67 => ("☂", "Rain"),
-        >= 71 and <= 77 => ("❄", "Snow"),
-        >= 80 and <= 82 => ("☂", "Showers"),
-        85 or 86 => ("❄", "Snow showers"),
-        >= 95 => ("⚡", "Thunderstorm"),
-        _ => ("☁", ""),
+        0 => (isDay ? WeatherKind.Sun : WeatherKind.Moon, "Clear"),
+        1 => (isDay ? WeatherKind.Sun : WeatherKind.Moon, "Mostly clear"),
+        2 => (isDay ? WeatherKind.CloudSun : WeatherKind.CloudMoon, "Partly cloudy"),
+        3 => (WeatherKind.Cloud, "Cloudy"),
+        45 or 48 => (WeatherKind.Fog, "Fog"),
+        >= 51 and <= 57 => (WeatherKind.Drizzle, "Drizzle"),
+        >= 61 and <= 67 => (WeatherKind.Rain, "Rain"),
+        >= 71 and <= 77 => (WeatherKind.Snow, "Snow"),
+        >= 80 and <= 82 => (WeatherKind.Rain, "Showers"),
+        85 or 86 => (WeatherKind.Snow, "Snow showers"),
+        >= 95 => (WeatherKind.Thunder, "Thunderstorm"),
+        _ => (WeatherKind.Cloud, ""),
     };
 
     public void Dispose() => _http.Dispose();

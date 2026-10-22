@@ -6,13 +6,14 @@
     underneath, so only the black island itself (plus the optional near-invisible HoverPadding margin)
     is interactive. Everything else is click-through, with no extra code.
 
-    The island is one Border that morphs between three sizes (dot, compact pill, expanded card), and the
-    "views" (pre-sized content panels) cross-fade inside it. MainWindow.xaml.cs decides which view is shown
-    and drives the size morph with a spring easing.
+    The island is one Border that morphs between sizes (dot, pills, the pages of the expanded card, an alert,
+    a menu), and the "views" (pre-sized content panels) cross-fade inside it. MainWindow.xaml.cs decides which
+    view is shown and drives the size morph with a spring easing. The expanded pages (now playing, timer,
+    to-do) share one header with the clock, the page tabs and the battery.
 
-    Font: Apple's SF Pro is used if it is installed on this PC. Otherwise the bundled Inter is used
-    (Fonts\, SIL Open Font License), a free font that looks almost identical at UI sizes. Apple's licence
-    does not allow SF Pro itself to be redistributed, so it can't ship inside the app.
+    Typography follows Apple's San Francisco rules everywhere (fonts: see App.xaml): the Text cut below 20 px,
+    the Display cut from 20 px up, and tabular figures wherever numbers change. Icons are vector paths drawn in
+    the style of SF Symbols, so no Windows symbol font shows up anywhere in the island.
 -->
 <Window x:Class="DynamicIsland.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -32,32 +33,53 @@
         ShowActivated="False"
         Focusable="False"
         UseLayoutRounding="True"
-        FontFamily="SF Pro Text, SF Pro, ./Fonts/#Inter, Segoe UI"
+        FontFamily="{StaticResource TextFont}"
         FontSize="12.5"
         Foreground="White">
 
     <Window.Resources>
         <helpers:PillCornerRadiusConverter x:Key="PillRadius"/>
 
-        <!-- ═════════════════════════ Palette ═════════════════════════ -->
+        <!-- ═════════════════════════ Palette (iOS dark-mode system colours) ═════════════════════════ -->
         <SolidColorBrush x:Key="IslandBrush" Color="#FF000000"/>
         <SolidColorBrush x:Key="IslandStrokeBrush" Color="#1FFFFFFF"/>
         <SolidColorBrush x:Key="SecondaryTextBrush" Color="#A6FFFFFF"/>
         <SolidColorBrush x:Key="TertiaryTextBrush" Color="#66FFFFFF"/>
         <SolidColorBrush x:Key="TrackBrush" Color="#38FFFFFF"/>
         <SolidColorBrush x:Key="TileBrush" Color="#FF262628"/>
+        <SolidColorBrush x:Key="FillBrush" Color="#1FFFFFFF"/>        <!-- neutral buttons and chips -->
+        <SolidColorBrush x:Key="FieldBrush" Color="#17FFFFFF"/>       <!-- the "Add a to-do" box -->
+        <SolidColorBrush x:Key="SeparatorBrush" Color="#1FFFFFFF"/>
+        <SolidColorBrush x:Key="TabTrackBrush" Color="#14FFFFFF"/>
+        <SolidColorBrush x:Key="TabThumbBrush" Color="#33FFFFFF"/>
+        <SolidColorBrush x:Key="SwitchOffBrush" Color="#3DFFFFFF"/>
         <SolidColorBrush x:Key="GreenBrush" Color="#FF30D158"/>
+        <SolidColorBrush x:Key="GreenTintBrush" Color="#3330D158"/>
         <SolidColorBrush x:Key="RedBrush" Color="#FFFF453A"/>
         <SolidColorBrush x:Key="YellowBrush" Color="#FFFFD60A"/>
+        <SolidColorBrush x:Key="OrangeBrush" Color="#FFFF9F0A"/>      <!-- timers, as in the iOS Clock app -->
+        <SolidColorBrush x:Key="OrangeTintBrush" Color="#33FF9F0A"/>
+        <SolidColorBrush x:Key="BlueBrush" Color="#FF0A84FF"/>        <!-- to-dos, as in Reminders -->
         <SolidColorBrush x:Key="SpotifyGreenBrush" Color="#FF1ED760"/>
 
         <!-- ═════════════════════════ Icons ═════════════════════════ -->
-        <!-- Vector icons keep the app font-independent and sharp at any display scaling. -->
+        <!-- Vector icons in the style of SF Symbols: font-independent and sharp at any display scaling. -->
         <Geometry x:Key="PlayGeometry">M 1,0.8 L 11.5,7 L 1,13.2 Z</Geometry>
         <Geometry x:Key="PauseGeometry">M 0,0 H 3.8 V 14 H 0 Z M 7.6,0 H 11.4 V 14 H 7.6 Z</Geometry>
         <Geometry x:Key="NextGeometry">M 0,0 L 8.5,6 L 0,12 Z M 8.5,0 L 17,6 L 8.5,12 Z</Geometry>
         <Geometry x:Key="PreviousGeometry">M 17,0 L 8.5,6 L 17,12 Z M 8.5,0 L 0,6 L 8.5,12 Z</Geometry>
         <Geometry x:Key="BoltGeometry">M 6.2,0 L 0.4,8 H 4.6 L 3.6,14 L 9.6,5.8 H 5.4 Z</Geometry>
+        <!-- music.note (filled; "F1" = non-zero fill, so the head and the stem merge) -->
+        <Geometry x:Key="MusicNoteGeometry">F1 M 0.8,12.6 A 3.5,2.75 0 1 1 7.8,12.6 A 3.5,2.75 0 1 1 0.8,12.6 Z M 6.6,12.6 V 2.1 L 12.6,0.5 V 3.9 L 7.8,5.3 V 12.6 Z</Geometry>
+        <!-- Line icons, drawn on their own small grid -->
+        <Geometry x:Key="TimerGeometry">M 2.1,9.3 A 5.9,5.9 0 1 1 13.9,9.3 A 5.9,5.9 0 1 1 2.1,9.3 Z M 6.3,1.1 H 9.7 M 8,1.1 V 3.4 M 8,9.3 L 10.3,6.7</Geometry>
+        <Geometry x:Key="ChecklistGeometry">M 0.9,2.3 L 2.3,3.6 L 4.7,0.9 M 7.2,2.3 H 15.1 M 0.9,7.1 L 2.3,8.4 L 4.7,5.7 M 7.2,7.1 H 15.1 M 0.9,11.9 L 2.3,13.2 L 4.7,10.5 M 7.2,11.9 H 15.1</Geometry>
+        <Geometry x:Key="PlusGeometry">M 6,0.6 V 11.4 M 0.6,6 H 11.4</Geometry>
+        <Geometry x:Key="MinusGeometry">M 0.6,6 H 11.4</Geometry>
+        <Geometry x:Key="XMarkGeometry">M 1,1 L 11,11 M 11,1 L 1,11</Geometry>
+        <Geometry x:Key="SmallXMarkGeometry">M 1,1 L 8,8 M 8,1 L 1,8</Geometry>
+        <Geometry x:Key="CheckmarkGeometry">M 5.2,9.3 L 7.8,11.9 L 12.9,6.5</Geometry>
+        <Geometry x:Key="RepeatGeometry">M 11.82,4.98 A 5.4,5.4 0 1 1 8,3.4 M 6.8,1.2 L 9,3.4 L 6.8,5.6</Geometry>
 
         <!-- Filled shape plus a stroke of the same colour with round joins gives softly rounded corners. -->
         <Style x:Key="IconPath" TargetType="Path">
@@ -68,12 +90,125 @@
             <Setter Property="Stretch" Value="Uniform"/>
         </Style>
 
+        <!-- A line icon drawn at its own coordinates (Stretch None). -->
         <Style x:Key="StrokePath" TargetType="Path">
             <Setter Property="Stroke" Value="White"/>
             <Setter Property="StrokeThickness" Value="1.5"/>
             <Setter Property="StrokeStartLineCap" Value="Round"/>
             <Setter Property="StrokeEndLineCap" Value="Round"/>
+            <Setter Property="StrokeLineJoin" Value="Round"/>
         </Style>
+
+        <!-- A line icon scaled to its Width/Height. The stroke keeps its thickness, like SF Symbols' weights. -->
+        <Style x:Key="LineIcon" TargetType="Path" BasedOn="{StaticResource StrokePath}">
+            <Setter Property="Stretch" Value="Uniform"/>
+        </Style>
+
+        <!--
+            Weather symbols, drawn on a 16×16 grid. The transparent square fixes every symbol's bounds, so they all
+            scale alike. "Knockout" strokes in the island's own black cut a thin gap where one shape sits in front of
+            another, the way SF Symbols separates a cloud from the sun behind it.
+        -->
+        <RectangleGeometry x:Key="WeatherFrame" Rect="0,0,16,16"/>
+        <Pen x:Key="WeatherLine" Brush="{StaticResource SecondaryTextBrush}" Thickness="1.4" StartLineCap="Round" EndLineCap="Round" LineJoin="Round"/>
+        <Pen x:Key="WeatherKnockout" Brush="Black" Thickness="2.2" LineJoin="Round"/>
+        <Geometry x:Key="CloudGeometry">M 4.3,13 A 2.75,2.75 0 0 1 4,7.6 A 4,4 0 0 1 11.6,6.4 A 3.32,3.32 0 0 1 12.2,13 Z</Geometry>
+        <Geometry x:Key="CloudHighGeometry">M 4.3,10.4 A 2.75,2.75 0 0 1 4,5 A 4,4 0 0 1 11.6,3.8 A 3.32,3.32 0 0 1 12.2,10.4 Z</Geometry>
+        <Geometry x:Key="CloudLowGeometry">M 3.26,13.45 A 2.34,2.34 0 0 1 3,8.86 A 3.4,3.4 0 0 1 9.46,7.84 A 2.82,2.82 0 0 1 9.97,13.45 Z</Geometry>
+        <Geometry x:Key="WeatherBoltGeometry">M 8.9,8.4 L 6.2,12.2 H 8.1 L 7.2,15.5 L 10.4,11.2 H 8.5 L 9.7,8.4 Z</Geometry>
+
+        <DrawingImage x:Key="Weather.Sun">
+            <DrawingImage.Drawing>
+                <DrawingGroup>
+                    <GeometryDrawing Brush="Transparent" Geometry="{StaticResource WeatherFrame}"/>
+                    <GeometryDrawing Brush="{StaticResource SecondaryTextBrush}" Geometry="M 4.9,8 A 3.1,3.1 0 1 1 11.1,8 A 3.1,3.1 0 1 1 4.9,8 Z"/>
+                    <GeometryDrawing Pen="{StaticResource WeatherLine}" Geometry="M 8,1.1 V 3 M 8,13 V 14.9 M 1.1,8 H 3 M 13,8 H 14.9 M 3.12,3.12 L 4.46,4.46 M 11.54,11.54 L 12.88,12.88 M 12.88,3.12 L 11.54,4.46 M 3.12,12.88 L 4.46,11.54"/>
+                </DrawingGroup>
+            </DrawingImage.Drawing>
+        </DrawingImage>
+        <DrawingImage x:Key="Weather.Moon">
+            <DrawingImage.Drawing>
+                <DrawingGroup>
+                    <GeometryDrawing Brush="Transparent" Geometry="{StaticResource WeatherFrame}"/>
+                    <GeometryDrawing Brush="{StaticResource SecondaryTextBrush}" Geometry="M 7.81,2 A 6,6 0 1 0 13.83,9.42 A 4.8,4.8 0 0 1 7.81,2 Z"/>
+                </DrawingGroup>
+            </DrawingImage.Drawing>
+        </DrawingImage>
+        <DrawingImage x:Key="Weather.CloudSun">
+            <DrawingImage.Drawing>
+                <DrawingGroup>
+                    <GeometryDrawing Brush="Transparent" Geometry="{StaticResource WeatherFrame}"/>
+                    <GeometryDrawing Brush="{StaticResource SecondaryTextBrush}" Geometry="M 8.1,5.4 A 2.5,2.5 0 1 1 13.1,5.4 A 2.5,2.5 0 1 1 8.1,5.4 Z"/>
+                    <GeometryDrawing Pen="{StaticResource WeatherLine}" Geometry="M 10.6,1.7 V 0.6 M 13.22,2.78 L 14.06,1.94 M 14.3,5.4 H 15.4 M 13.22,8.02 L 14.06,8.86 M 7.98,2.78 L 7.14,1.94"/>
+                    <GeometryDrawing Pen="{StaticResource WeatherKnockout}" Geometry="{StaticResource CloudLowGeometry}"/>
+                    <GeometryDrawing Brush="{StaticResource SecondaryTextBrush}" Geometry="{StaticResource CloudLowGeometry}"/>
+                </DrawingGroup>
+            </DrawingImage.Drawing>
+        </DrawingImage>
+        <DrawingImage x:Key="Weather.CloudMoon">
+            <DrawingImage.Drawing>
+                <DrawingGroup>
+                    <GeometryDrawing Brush="Transparent" Geometry="{StaticResource WeatherFrame}"/>
+                    <GeometryDrawing Brush="{StaticResource SecondaryTextBrush}" Geometry="M 10.7,0.9 A 3.3,3.3 0 1 0 14.01,4.98 A 2.64,2.64 0 0 1 10.7,0.9 Z"/>
+                    <GeometryDrawing Pen="{StaticResource WeatherKnockout}" Geometry="{StaticResource CloudLowGeometry}"/>
+                    <GeometryDrawing Brush="{StaticResource SecondaryTextBrush}" Geometry="{StaticResource CloudLowGeometry}"/>
+                </DrawingGroup>
+            </DrawingImage.Drawing>
+        </DrawingImage>
+        <DrawingImage x:Key="Weather.Cloud">
+            <DrawingImage.Drawing>
+                <DrawingGroup>
+                    <GeometryDrawing Brush="Transparent" Geometry="{StaticResource WeatherFrame}"/>
+                    <GeometryDrawing Brush="{StaticResource SecondaryTextBrush}" Geometry="{StaticResource CloudGeometry}"/>
+                </DrawingGroup>
+            </DrawingImage.Drawing>
+        </DrawingImage>
+        <DrawingImage x:Key="Weather.Fog">
+            <DrawingImage.Drawing>
+                <DrawingGroup>
+                    <GeometryDrawing Brush="Transparent" Geometry="{StaticResource WeatherFrame}"/>
+                    <GeometryDrawing Brush="{StaticResource SecondaryTextBrush}" Geometry="{StaticResource CloudHighGeometry}"/>
+                    <GeometryDrawing Pen="{StaticResource WeatherLine}" Geometry="M 2.6,12.9 H 12.4 M 5.2,15.1 H 14"/>
+                </DrawingGroup>
+            </DrawingImage.Drawing>
+        </DrawingImage>
+        <DrawingImage x:Key="Weather.Drizzle">
+            <DrawingImage.Drawing>
+                <DrawingGroup>
+                    <GeometryDrawing Brush="Transparent" Geometry="{StaticResource WeatherFrame}"/>
+                    <GeometryDrawing Brush="{StaticResource SecondaryTextBrush}" Geometry="{StaticResource CloudHighGeometry}"/>
+                    <GeometryDrawing Pen="{StaticResource WeatherLine}" Geometry="M 5.4,12.4 L 5,13.6 M 8.6,13.4 L 8.2,14.6 M 11.8,12.4 L 11.4,13.6"/>
+                </DrawingGroup>
+            </DrawingImage.Drawing>
+        </DrawingImage>
+        <DrawingImage x:Key="Weather.Rain">
+            <DrawingImage.Drawing>
+                <DrawingGroup>
+                    <GeometryDrawing Brush="Transparent" Geometry="{StaticResource WeatherFrame}"/>
+                    <GeometryDrawing Brush="{StaticResource SecondaryTextBrush}" Geometry="{StaticResource CloudHighGeometry}"/>
+                    <GeometryDrawing Pen="{StaticResource WeatherLine}" Geometry="M 5.4,12.2 L 4.4,14.9 M 8.6,12.2 L 7.6,14.9 M 11.8,12.2 L 10.8,14.9"/>
+                </DrawingGroup>
+            </DrawingImage.Drawing>
+        </DrawingImage>
+        <DrawingImage x:Key="Weather.Snow">
+            <DrawingImage.Drawing>
+                <DrawingGroup>
+                    <GeometryDrawing Brush="Transparent" Geometry="{StaticResource WeatherFrame}"/>
+                    <GeometryDrawing Brush="{StaticResource SecondaryTextBrush}" Geometry="{StaticResource CloudHighGeometry}"/>
+                    <GeometryDrawing Brush="{StaticResource SecondaryTextBrush}" Geometry="M 4.2,12.8 A 0.9,0.9 0 1 1 6,12.8 A 0.9,0.9 0 1 1 4.2,12.8 Z M 7.4,12.8 A 0.9,0.9 0 1 1 9.2,12.8 A 0.9,0.9 0 1 1 7.4,12.8 Z M 10.6,12.8 A 0.9,0.9 0 1 1 12.4,12.8 A 0.9,0.9 0 1 1 10.6,12.8 Z M 5.8,14.9 A 0.9,0.9 0 1 1 7.6,14.9 A 0.9,0.9 0 1 1 5.8,14.9 Z M 9,14.9 A 0.9,0.9 0 1 1 10.8,14.9 A 0.9,0.9 0 1 1 9,14.9 Z"/>
+                </DrawingGroup>
+            </DrawingImage.Drawing>
+        </DrawingImage>
+        <DrawingImage x:Key="Weather.Thunder">
+            <DrawingImage.Drawing>
+                <DrawingGroup>
+                    <GeometryDrawing Brush="Transparent" Geometry="{StaticResource WeatherFrame}"/>
+                    <GeometryDrawing Brush="{StaticResource SecondaryTextBrush}" Geometry="{StaticResource CloudHighGeometry}"/>
+                    <GeometryDrawing Pen="{StaticResource WeatherKnockout}" Geometry="{StaticResource WeatherBoltGeometry}"/>
+                    <GeometryDrawing Brush="{StaticResource SecondaryTextBrush}" Geometry="{StaticResource WeatherBoltGeometry}"/>
+                </DrawingGroup>
+            </DrawingImage.Drawing>
+        </DrawingImage>
 
         <!-- ═════════════════════════ Views ═════════════════════════ -->
         <!-- Every view starts invisible and inert; the code fades in exactly one at a time. -->
@@ -86,6 +221,8 @@
         </Style>
 
         <!-- ═════════════════════════ Buttons ═════════════════════════ -->
+        <!-- None of the buttons can take keyboard focus, so clicking one never pulls focus from the app you use. -->
+
         <!-- Round, borderless transport button: soft highlight on hover, a little squish when pressed. -->
         <BackEase x:Key="PressReleaseEase" EasingMode="EaseOut" Amplitude="0.6"/>
         <Style x:Key="IslandButton" TargetType="Button">
@@ -135,6 +272,125 @@
             </Setter>
         </Style>
 
+        <!--
+            Filled circle, like the round buttons of the iOS Clock app (Start, Pause, Cancel). The Background is the
+            fill; a white overlay brightens it on hover, so tinted buttons keep their colour.
+        -->
+        <Style x:Key="CircleButton" TargetType="Button">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Width" Value="58"/>
+            <Setter Property="Height" Value="58"/>
+            <Setter Property="Background" Value="{StaticResource FillBrush}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid x:Name="Chrome" RenderTransformOrigin="0.5,0.5">
+                            <Grid.RenderTransform>
+                                <ScaleTransform/>
+                            </Grid.RenderTransform>
+                            <Ellipse Fill="{TemplateBinding Background}"/>
+                            <Ellipse x:Name="Highlight" Fill="White" Opacity="0"/>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Highlight" Property="Opacity" Value="0.1"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Highlight" Property="Opacity" Value="0.18"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="0.9" Duration="0:0:0.08"/>
+                                            <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="0.9" Duration="0:0:0.08"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="1" Duration="0:0:0.3" EasingFunction="{StaticResource PressReleaseEase}"/>
+                                            <DoubleAnimation Storyboard.TargetName="Chrome" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="1" Duration="0:0:0.3" EasingFunction="{StaticResource PressReleaseEase}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.3"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The timer's − and + buttons: keep holding to keep counting. -->
+        <Style x:Key="StepperButton" TargetType="RepeatButton">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Width" Value="34"/>
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Delay" Value="350"/>
+            <Setter Property="Interval" Value="60"/>
+            <Setter Property="Background" Value="{StaticResource FillBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RepeatButton">
+                        <Grid>
+                            <Ellipse Fill="{TemplateBinding Background}"/>
+                            <Ellipse x:Name="Highlight" Fill="White" Opacity="0"/>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Highlight" Property="Opacity" Value="0.1"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Highlight" Property="Opacity" Value="0.18"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.3"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Quick-pick chips on the timer page (created in code from IslandConfig.TimerPresets). -->
+        <Style x:Key="ChipButton" TargetType="Button">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="Margin" Value="3,0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="{StaticResource FillBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border CornerRadius="13" Background="{TemplateBinding Background}"/>
+                            <Border x:Name="Highlight" CornerRadius="13" Background="White" Opacity="0"/>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Highlight" Property="Opacity" Value="0.08"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Highlight" Property="Opacity" Value="0.16"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="PillButton" TargetType="Button">
             <Setter Property="Focusable" Value="False"/>
             <Setter Property="Cursor" Value="Hand"/>
@@ -146,7 +402,9 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="999" Padding="{TemplateBinding Padding}">
+                        <!-- Corner radius = half the height: a true capsule (a huge fixed radius would make an ellipse). -->
+                        <Border x:Name="Chrome" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}"
+                                CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadius}}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -161,6 +419,154 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Page tabs in the header. The selected tab gets a local Opacity of 1 from code, which beats these setters. -->
+        <Style x:Key="TabButton" TargetType="Button">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="Height" Value="20"/>
+            <Setter Property="Opacity" Value="0.5"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Opacity" Value="0.8"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- A row of the right-click menu. Its corners are concentric with the island's (30 − 8 px inset = 22). -->
+        <Style x:Key="MenuRow" TargetType="Button">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Height" Value="38"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome" Background="Transparent" CornerRadius="22" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#14FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#24FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- No chrome at all: the whole to-do row is the "tick it off" button. -->
+        <Style x:Key="PlainButton" TargetType="Button">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="Transparent">
+                            <ContentPresenter/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!--
+            The "Add a to-do" text box: just the text and caret, on the rounded field behind it. Its context menu is
+            off (it would be a standard Windows menu, in Segoe UI); Ctrl+C / Ctrl+V and friends still work.
+        -->
+        <Style x:Key="IslandTextBox" TargetType="TextBox">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="CaretBrush" Value="White"/>
+            <Setter Property="SelectionBrush" Value="{StaticResource BlueBrush}"/>
+            <Setter Property="SelectionOpacity" Value="0.45"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="MaxLength" Value="200"/>
+            <Setter Property="UndoLimit" Value="20"/>
+            <Setter Property="ContextMenuService.IsEnabled" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <ScrollViewer x:Name="PART_ContentHost" Focusable="False" VerticalAlignment="Center"
+                                      HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ═════════════════════════ To-do row ═════════════════════════ -->
+        <!-- Reminders-style: a round check, the text, and a delete button that shows up on hover. -->
+        <DataTemplate x:Key="TodoRowTemplate">
+            <Grid x:Name="Row" Height="{x:Static local:IslandConfig.TodoRowHeight}" Background="Transparent">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Border x:Name="RowHighlight" Grid.ColumnSpan="2" CornerRadius="9" Background="#0FFFFFFF" Opacity="0"/>
+
+                <Button x:Name="RowButton" Style="{StaticResource PlainButton}" Click="OnTodoToggleClick">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid Width="18" Height="18" Margin="6,0,10,0" VerticalAlignment="Center">
+                            <Ellipse x:Name="CheckRing" Stroke="#66FFFFFF" StrokeThickness="1.5"/>
+                            <Ellipse x:Name="CheckFill" Fill="{StaticResource BlueBrush}" Opacity="0" RenderTransformOrigin="0.5,0.5">
+                                <Ellipse.RenderTransform>
+                                    <ScaleTransform/>
+                                </Ellipse.RenderTransform>
+                            </Ellipse>
+                            <Path x:Name="CheckMark" Data="{StaticResource CheckmarkGeometry}" Style="{StaticResource StrokePath}" StrokeThickness="1.8" Opacity="0"/>
+                        </Grid>
+                        <TextBlock x:Name="TodoText" Grid.Column="1" VerticalAlignment="Center" FontSize="13" Text="{Binding Text}" TextTrimming="CharacterEllipsis"/>
+                    </Grid>
+                </Button>
+
+                <Button x:Name="DeleteButton" Grid.Column="1" AutomationProperties.Name="Delete" Width="24" Height="24" Margin="4,0,3,0" Style="{StaticResource CircleButton}"
+                        Background="Transparent" Opacity="0" Click="OnTodoDeleteClick">
+                    <Path Data="{StaticResource SmallXMarkGeometry}" Style="{StaticResource StrokePath}" Width="9" Height="9"
+                          Stroke="{StaticResource SecondaryTextBrush}" StrokeThickness="1.4"/>
+                </Button>
+            </Grid>
+            <DataTemplate.Triggers>
+                <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="RowHighlight" Property="Opacity" Value="1"/>
+                    <Setter TargetName="DeleteButton" Property="Opacity" Value="1"/>
+                </Trigger>
+                <DataTrigger Binding="{Binding IsDone}" Value="True">
+                    <Setter TargetName="CheckRing" Property="Stroke" Value="{StaticResource BlueBrush}"/>
+                    <Setter TargetName="CheckFill" Property="Opacity" Value="1"/>
+                    <Setter TargetName="CheckMark" Property="Opacity" Value="1"/>
+                    <Setter TargetName="TodoText" Property="Foreground" Value="{StaticResource TertiaryTextBrush}"/>
+                    <Setter TargetName="TodoText" Property="TextDecorations" Value="Strikethrough"/>
+                </DataTrigger>
+                <!-- The check pops in with a little overshoot -->
+                <EventTrigger SourceName="RowButton" RoutedEvent="ButtonBase.Click">
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetName="CheckFill" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" From="0.4" To="1" Duration="0:0:0.35" EasingFunction="{StaticResource PressReleaseEase}"/>
+                            <DoubleAnimation Storyboard.TargetName="CheckFill" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" From="0.4" To="1" Duration="0:0:0.35" EasingFunction="{StaticResource PressReleaseEase}"/>
+                        </Storyboard>
+                    </BeginStoryboard>
+                </EventTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
 
         <!-- ═════════════════════════ Equalizer ═════════════════════════ -->
         <!-- Fill is replaced in code by the album-art accent brush (see MainWindow constructor). -->
@@ -190,6 +596,12 @@
             <DoubleAnimation Storyboard.TargetName="EqBar6" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" From="0.50" To="0.90" Duration="0:0:0.35" BeginTime="0:0:0.12" AutoReverse="True" RepeatBehavior="Forever" EasingFunction="{StaticResource EqEase}"/>
             <DoubleAnimation Storyboard.TargetName="EqBar7" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" From="0.25" To="0.85" Duration="0:0:0.55" BeginTime="0:0:0.04" AutoReverse="True" RepeatBehavior="Forever" EasingFunction="{StaticResource EqEase}"/>
             <DoubleAnimation Storyboard.TargetName="EqBar8" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" From="0.40" To="1.00" Duration="0:0:0.40" BeginTime="0:0:0.20" AutoReverse="True" RepeatBehavior="Forever" EasingFunction="{StaticResource EqEase}"/>
+        </Storyboard>
+
+        <!-- The "Timer done" icon breathes while the alarm sounds (30 fps, and only then). -->
+        <Storyboard x:Key="TimerAlertPulse" Timeline.DesiredFrameRate="30">
+            <DoubleAnimation Storyboard.TargetName="TimerAlertPulseScale" Storyboard.TargetProperty="ScaleX" From="1" To="1.12" Duration="0:0:0.6" AutoReverse="True" RepeatBehavior="Forever" EasingFunction="{StaticResource EqEase}"/>
+            <DoubleAnimation Storyboard.TargetName="TimerAlertPulseScale" Storyboard.TargetProperty="ScaleY" From="1" To="1.12" Duration="0:0:0.6" AutoReverse="True" RepeatBehavior="Forever" EasingFunction="{StaticResource EqEase}"/>
         </Storyboard>
     </Window.Resources>
 
@@ -236,8 +648,8 @@
 
                     <Border Width="24" Height="24" Margin="6,0,0,0" CornerRadius="7" Background="{StaticResource TileBrush}">
                         <Grid>
-                            <TextBlock Text="♫" FontFamily="Segoe UI Symbol" FontSize="12" Foreground="{StaticResource TertiaryTextBrush}"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <Path Data="{StaticResource MusicNoteGeometry}" Style="{StaticResource IconPath}" Width="9" Height="11"
+                                  Fill="{StaticResource TertiaryTextBrush}" Stroke="{StaticResource TertiaryTextBrush}" StrokeThickness="0.8"/>
                             <Border CornerRadius="7">
                                 <Border.Background>
                                     <ImageBrush x:Name="CompactArtBrush" Stretch="UniformToFill"/>
@@ -249,12 +661,39 @@
                     <TextBlock x:Name="CompactTitle" Grid.Column="1" Margin="10,0,8,0" VerticalAlignment="Center"
                                Foreground="#E6FFFFFF" TextTrimming="CharacterEllipsis"/>
 
-                    <StackPanel Grid.Column="2" Margin="0,0,14,0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <StackPanel x:Name="CompactEqualizer" Grid.Column="2" Margin="0,0,14,0" Orientation="Horizontal" VerticalAlignment="Center">
                         <Rectangle x:Name="EqBar1" Style="{StaticResource EqBar}"><Rectangle.RenderTransform><ScaleTransform ScaleY="0.35"/></Rectangle.RenderTransform></Rectangle>
                         <Rectangle x:Name="EqBar2" Style="{StaticResource EqBar}"><Rectangle.RenderTransform><ScaleTransform ScaleY="0.35"/></Rectangle.RenderTransform></Rectangle>
                         <Rectangle x:Name="EqBar3" Style="{StaticResource EqBar}"><Rectangle.RenderTransform><ScaleTransform ScaleY="0.35"/></Rectangle.RenderTransform></Rectangle>
                         <Rectangle x:Name="EqBar4" Style="{StaticResource EqBar}"><Rectangle.RenderTransform><ScaleTransform ScaleY="0.35"/></Rectangle.RenderTransform></Rectangle>
                     </StackPanel>
+
+                    <!-- While a timer runs next to the music, its countdown takes the equalizer's place. -->
+                    <StackPanel x:Name="CompactMediaTimer" Grid.Column="2" Margin="0,0,14,0" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+                        <controls:ProgressRing x:Name="CompactMediaTimerRing" Width="14" Height="14" Thickness="2" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="CompactMediaTimerText" Margin="6,0,0,0" VerticalAlignment="Center" FontWeight="SemiBold"
+                                   Foreground="{StaticResource OrangeBrush}" Typography.NumeralAlignment="Tabular"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- ═══════════════ Compact · Timer ═══════════════ -->
+                <!-- The ring sits 8 px from the pill's rounded end, so the two circles share a centre. -->
+                <Grid x:Name="CompactTimerView" Style="{StaticResource View}"
+                      Width="{x:Static local:IslandConfig.CompactTimerWidth}" Height="{x:Static local:IslandConfig.CompactHeight}">
+                    <Grid.RenderTransform>
+                        <ScaleTransform/>
+                    </Grid.RenderTransform>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <controls:ProgressRing x:Name="CompactTimerRing" Width="20" Height="20" Margin="8,0,0,0" Thickness="2.6" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="CompactTimerLabel" Grid.Column="1" Margin="10,0,8,0" VerticalAlignment="Center" Text="Timer"
+                               Foreground="{StaticResource SecondaryTextBrush}"/>
+                    <TextBlock x:Name="CompactTimerText" Grid.Column="2" Margin="0,0,15,0" VerticalAlignment="Center" FontSize="14" FontWeight="SemiBold"
+                               Foreground="{StaticResource OrangeBrush}" Typography.NumeralAlignment="Tabular"/>
                 </Grid>
 
                 <!-- ═══════════════ Compact · Volume HUD ═══════════════ -->
@@ -308,42 +747,103 @@
                           Fill="{StaticResource GreenBrush}" Stroke="{StaticResource GreenBrush}"/>
                     <TextBlock Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center" Text="Charging" FontWeight="SemiBold"/>
                     <TextBlock x:Name="ChargingPercentText" Grid.Column="2" Margin="0,0,8,0" VerticalAlignment="Center"
-                               FontWeight="SemiBold" Foreground="{StaticResource GreenBrush}"/>
+                               FontWeight="SemiBold" Foreground="{StaticResource GreenBrush}" Typography.NumeralAlignment="Tabular"/>
                     <controls:BatteryIcon x:Name="ChargingBatteryIcon" Grid.Column="3" Width="25" Height="12" Margin="0,0,16,0"
                                           Fill="{StaticResource GreenBrush}" IsCharging="True"/>
                 </Grid>
 
-                <!-- ═══════════════ Expanded · Media player ═══════════════ -->
+                <!-- ═══════════════ Alert · Timer done ═══════════════ -->
+                <Grid x:Name="TimerAlertView" Style="{StaticResource View}"
+                      Width="{x:Static local:IslandConfig.TimerAlertWidth}" Height="{x:Static local:IslandConfig.TimerAlertHeight}">
+                    <Grid.RenderTransform>
+                        <ScaleTransform/>
+                    </Grid.RenderTransform>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Grid Width="44" Height="44" Margin="12,0,0,0" RenderTransformOrigin="0.5,0.5">
+                        <Grid.RenderTransform>
+                            <ScaleTransform x:Name="TimerAlertPulseScale"/>
+                        </Grid.RenderTransform>
+                        <Ellipse Fill="{StaticResource OrangeTintBrush}"/>
+                        <Path Data="{StaticResource TimerGeometry}" Style="{StaticResource LineIcon}" Width="20" Height="20"
+                              Stroke="{StaticResource OrangeBrush}" StrokeThickness="1.8"/>
+                    </Grid>
+
+                    <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
+                        <TextBlock Text="Timer done" FontSize="15" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="TimerAlertDetail" Margin="0,1,0,0" FontSize="12" Foreground="{StaticResource SecondaryTextBrush}"/>
+                    </StackPanel>
+
+                    <!-- Repeat starts the same timer again; Stop (or a click anywhere else on the alert) dismisses it. -->
+                    <Button Grid.Column="2" Width="40" Height="40" Style="{StaticResource CircleButton}" Click="OnTimerRepeatClick" AutomationProperties.Name="Repeat">
+                        <Path Data="{StaticResource RepeatGeometry}" Style="{StaticResource StrokePath}" Width="16" Height="16" StrokeThickness="1.7"/>
+                    </Button>
+                    <Button Grid.Column="3" Width="40" Height="40" Margin="8,0,14,0" Style="{StaticResource CircleButton}"
+                            Background="{StaticResource OrangeBrush}" Click="OnTimerStopClick" AutomationProperties.Name="Stop">
+                        <Path Data="{StaticResource XMarkGeometry}" Style="{StaticResource StrokePath}" Width="12" Height="12" StrokeThickness="2"/>
+                    </Button>
+                </Grid>
+
+                <!-- ═══════════════ Menu (right-click) ═══════════════ -->
+                <Grid x:Name="MenuView" Style="{StaticResource View}"
+                      Width="{x:Static local:IslandConfig.MenuWidth}" Height="{x:Static local:IslandConfig.MenuHeight}">
+                    <Grid.RenderTransform>
+                        <ScaleTransform/>
+                    </Grid.RenderTransform>
+
+                    <StackPanel Margin="8" VerticalAlignment="Center">
+                        <Button Style="{StaticResource MenuRow}" Click="OnStartupToggleClick">
+                            <Grid>
+                                <TextBlock VerticalAlignment="Center" Text="Start with Windows"/>
+                                <!-- iOS switch: green when on; the knob slides with a spring -->
+                                <Border x:Name="StartupSwitch" Width="38" Height="22" HorizontalAlignment="Right" CornerRadius="11"
+                                        Background="{StaticResource SwitchOffBrush}">
+                                    <Ellipse Width="18" Height="18" Margin="2,0" HorizontalAlignment="Left" Fill="White">
+                                        <Ellipse.RenderTransform>
+                                            <TranslateTransform x:Name="StartupSwitchKnob"/>
+                                        </Ellipse.RenderTransform>
+                                    </Ellipse>
+                                </Border>
+                            </Grid>
+                        </Button>
+                        <Rectangle Height="1" Margin="14,0" Fill="{StaticResource SeparatorBrush}"/>
+                        <Button Style="{StaticResource MenuRow}" Click="OnQuitClick">
+                            <Grid>
+                                <TextBlock VerticalAlignment="Center" Text="Quit Dynamic Island" Foreground="{StaticResource RedBrush}"/>
+                                <TextBlock x:Name="VersionText" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="11"
+                                           Foreground="{StaticResource TertiaryTextBrush}"/>
+                            </Grid>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+
+                <!--
+                    ═══════════════ Expanded pages ═══════════════
+                    Each page leaves its top 48 px free for the shared header at the end of the Stage.
+                -->
+
+                <!-- ─────────── Now playing ─────────── -->
                 <Grid x:Name="ExpandedMediaView" Style="{StaticResource View}" VerticalAlignment="Top" RenderTransformOrigin="0.5,0"
                       Width="{x:Static local:IslandConfig.ExpandedWidth}" Height="{x:Static local:IslandConfig.ExpandedMediaHeight}">
                     <Grid.RenderTransform>
                         <ScaleTransform/>
                     </Grid.RenderTransform>
 
-                    <Grid Margin="20,14,20,10">
+                    <Grid Margin="20,48,20,10">
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="18"/>  <!-- clock · date | weather · battery -->
-                            <RowDefinition Height="14"/>
                             <RowDefinition Height="64"/>  <!-- artwork · title · artist -->
                             <RowDefinition Height="14"/>
                             <RowDefinition Height="14"/>  <!-- progress -->
                             <RowDefinition Height="*"/>   <!-- transport controls -->
                         </Grid.RowDefinitions>
 
-                        <!-- Header -->
-                        <DockPanel LastChildFill="False">
-                            <TextBlock x:Name="MediaClockText" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" Typography.NumeralAlignment="Tabular"/>
-                            <TextBlock x:Name="MediaDateText" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="12" Foreground="{StaticResource SecondaryTextBrush}"/>
-                            <StackPanel x:Name="MediaBatteryPanel" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock x:Name="MediaBatteryText" Margin="0,0,6,0" VerticalAlignment="Center" FontSize="12"/>
-                                <controls:BatteryIcon x:Name="MediaBatteryIcon" Width="24" Height="12" VerticalAlignment="Center"/>
-                            </StackPanel>
-                            <TextBlock x:Name="MediaWeatherText" DockPanel.Dock="Right" Margin="0,0,12,0" VerticalAlignment="Center"
-                                       FontSize="12" Foreground="{StaticResource SecondaryTextBrush}" Visibility="Collapsed"/>
-                        </DockPanel>
-
                         <!-- Artwork, title, artist, source app, equalizer -->
-                        <Grid Grid.Row="2">
+                        <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="64"/>
                                 <ColumnDefinition Width="*"/>
@@ -352,8 +852,8 @@
 
                             <Border CornerRadius="14" Background="{StaticResource TileBrush}" Cursor="Hand" MouseLeftButtonUp="OnArtworkClick">
                                 <Grid>
-                                    <TextBlock Text="♫" FontFamily="Segoe UI Symbol" FontSize="26" Foreground="{StaticResource TertiaryTextBrush}"
-                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    <Path Data="{StaticResource MusicNoteGeometry}" Style="{StaticResource IconPath}" Width="20" Height="24"
+                                          Fill="{StaticResource TertiaryTextBrush}" Stroke="{StaticResource TertiaryTextBrush}"/>
                                     <Border CornerRadius="14">
                                         <Border.Background>
                                             <ImageBrush x:Name="ExpandedArtBrush" Stretch="UniformToFill"/>
@@ -377,7 +877,7 @@
                         </Grid>
 
                         <!-- Progress -->
-                        <Grid x:Name="ProgressRow" Grid.Row="4">
+                        <Grid x:Name="ProgressRow" Grid.Row="2">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="40"/>
                                 <ColumnDefinition Width="*"/>
@@ -394,53 +894,218 @@
                         </Grid>
 
                         <!-- Transport controls -->
-                        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Button x:Name="PreviousButton" Style="{StaticResource IslandButton}" Click="OnPreviousClick">
+                        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Button x:Name="PreviousButton" Style="{StaticResource IslandButton}" Click="OnPreviousClick" AutomationProperties.Name="Previous">
                                 <Path Data="{StaticResource PreviousGeometry}" Style="{StaticResource IconPath}" Width="20" Height="14"/>
                             </Button>
-                            <Button x:Name="PlayPauseButton" Style="{StaticResource IslandButton}" Width="48" Height="48" Margin="26,0" Click="OnPlayPauseClick">
+                            <Button x:Name="PlayPauseButton" Style="{StaticResource IslandButton}" Width="48" Height="48" Margin="26,0" Click="OnPlayPauseClick" AutomationProperties.Name="Play or pause">
                                 <Grid>
                                     <Path x:Name="PlayIcon" Data="{StaticResource PlayGeometry}" Style="{StaticResource IconPath}" Width="16" Height="19" Margin="3,0,0,0"/>
                                     <Path x:Name="PauseIcon" Data="{StaticResource PauseGeometry}" Style="{StaticResource IconPath}" Width="15" Height="18" Visibility="Collapsed"/>
                                 </Grid>
                             </Button>
-                            <Button x:Name="NextButton" Style="{StaticResource IslandButton}" Click="OnNextClick">
+                            <Button x:Name="NextButton" Style="{StaticResource IslandButton}" Click="OnNextClick" AutomationProperties.Name="Next">
                                 <Path Data="{StaticResource NextGeometry}" Style="{StaticResource IconPath}" Width="20" Height="14"/>
                             </Button>
                         </StackPanel>
                     </Grid>
                 </Grid>
 
-                <!-- ═══════════════ Expanded · Nothing playing ═══════════════ -->
+                <!-- ─────────── Nothing playing ─────────── -->
+                <!-- A lock-screen clock in the Display cut takes the header clock's corner on this page. -->
                 <Grid x:Name="ExpandedIdleView" Style="{StaticResource View}" VerticalAlignment="Top" RenderTransformOrigin="0.5,0"
                       Width="{x:Static local:IslandConfig.ExpandedWidth}" Height="{x:Static local:IslandConfig.ExpandedIdleHeight}">
                     <Grid.RenderTransform>
                         <ScaleTransform/>
                     </Grid.RenderTransform>
 
-                    <Grid Margin="24,10,22,16">
+                    <Grid Margin="20,2,20,16">
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>  <!-- big clock | battery -->
+                            <RowDefinition Height="Auto"/>  <!-- big clock -->
                             <RowDefinition Height="Auto"/>  <!-- date | weather -->
                             <RowDefinition Height="*"/>     <!-- nothing playing | open Spotify -->
                         </Grid.RowDefinitions>
 
-                        <!-- Display cut for the big clock, like SF Pro Display on iOS -->
-                        <TextBlock x:Name="IdleClockText" FontSize="36" FontWeight="Light" Typography.NumeralAlignment="Tabular"
-                                   FontFamily="SF Pro Display, SF Pro, ./Fonts/#Inter Display, ./Fonts/#Inter, Segoe UI"/>
-                        <StackPanel x:Name="IdleBatteryPanel" HorizontalAlignment="Right" VerticalAlignment="Center" Orientation="Horizontal">
-                            <TextBlock x:Name="IdleBatteryText" Margin="0,0,7,0" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold"/>
-                            <controls:BatteryIcon x:Name="IdleBatteryIcon" Width="27" Height="13" VerticalAlignment="Center"/>
-                        </StackPanel>
-
-                        <TextBlock x:Name="IdleDateText" Grid.Row="1" Margin="1,-3,0,0" FontSize="13" Foreground="{StaticResource SecondaryTextBrush}"/>
-                        <TextBlock x:Name="IdleWeatherText" Grid.Row="1" Margin="0,-3,0,0" HorizontalAlignment="Right" FontSize="13"
+                        <TextBlock x:Name="IdleClockText" Margin="1,0,0,0" FontFamily="{StaticResource DisplayFont}" FontSize="36" FontWeight="Light"
+                                   Typography.NumeralAlignment="Tabular"/>
+                        <TextBlock x:Name="IdleDateText" Grid.Row="1" Margin="2,-4,0,0" FontSize="13" Foreground="{StaticResource SecondaryTextBrush}"/>
+                        <TextBlock x:Name="IdleWeatherText" Grid.Row="1" Margin="0,-4,0,0" HorizontalAlignment="Right" FontSize="13"
                                    Foreground="{StaticResource SecondaryTextBrush}" Visibility="Collapsed"/>
 
                         <DockPanel Grid.Row="2" VerticalAlignment="Bottom">
                             <Button DockPanel.Dock="Right" Style="{StaticResource PillButton}" Content="Open Spotify" Click="OnOpenSpotifyClick"/>
-                            <TextBlock VerticalAlignment="Center" Text="♫  Nothing playing" Foreground="{StaticResource TertiaryTextBrush}"/>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Path Data="{StaticResource MusicNoteGeometry}" Style="{StaticResource IconPath}" Width="10" Height="12"
+                                      Fill="{StaticResource TertiaryTextBrush}" Stroke="{StaticResource TertiaryTextBrush}" StrokeThickness="0.8"/>
+                                <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Text="Nothing playing" Foreground="{StaticResource TertiaryTextBrush}"/>
+                            </StackPanel>
                         </DockPanel>
+                    </Grid>
+                </Grid>
+
+                <!-- ─────────── Timer: pick a duration ─────────── -->
+                <Grid x:Name="TimerSetupView" Style="{StaticResource View}" VerticalAlignment="Top" RenderTransformOrigin="0.5,0"
+                      Width="{x:Static local:IslandConfig.ExpandedWidth}" Height="{x:Static local:IslandConfig.TimerSetupHeight}">
+                    <Grid.RenderTransform>
+                        <ScaleTransform/>
+                    </Grid.RenderTransform>
+
+                    <Grid Margin="17,46,20,14">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="58"/>  <!-- − 5:00 + · Start -->
+                            <RowDefinition Height="*"/>   <!-- quick picks -->
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <RepeatButton x:Name="TimerMinusButton" Style="{StaticResource StepperButton}" Click="OnTimerMinusClick" AutomationProperties.Name="Shorter">
+                                <Path Data="{StaticResource MinusGeometry}" Style="{StaticResource StrokePath}" Width="12" Height="12" StrokeThickness="1.8"/>
+                            </RepeatButton>
+                            <!-- Scroll over the time to change it a minute at a time. -->
+                            <TextBlock x:Name="TimerSetupText" MinWidth="124" Margin="6,0" Background="Transparent" TextAlignment="Center" VerticalAlignment="Center"
+                                       FontFamily="{StaticResource DisplayFont}" FontSize="40" FontWeight="Light" Typography.NumeralAlignment="Tabular"
+                                       MouseWheel="OnTimerSetupWheel"/>
+                            <RepeatButton x:Name="TimerPlusButton" Style="{StaticResource StepperButton}" Click="OnTimerPlusClick" AutomationProperties.Name="Longer">
+                                <Path Data="{StaticResource PlusGeometry}" Style="{StaticResource StrokePath}" Width="12" Height="12" StrokeThickness="1.8"/>
+                            </RepeatButton>
+                        </StackPanel>
+
+                        <Button HorizontalAlignment="Right" Style="{StaticResource CircleButton}" Content="Start" Click="OnTimerStartClick"
+                                Background="{StaticResource GreenTintBrush}" Foreground="{StaticResource GreenBrush}"/>
+
+                        <UniformGrid x:Name="TimerPresetPanel" Grid.Row="1" Rows="1" VerticalAlignment="Bottom"/>
+                    </Grid>
+                </Grid>
+
+                <!-- ─────────── Timer: counting down ─────────── -->
+                <Grid x:Name="TimerRunningView" Style="{StaticResource View}" VerticalAlignment="Top" RenderTransformOrigin="0.5,0"
+                      Width="{x:Static local:IslandConfig.ExpandedWidth}" Height="{x:Static local:IslandConfig.TimerRunningHeight}">
+                    <Grid.RenderTransform>
+                        <ScaleTransform/>
+                    </Grid.RenderTransform>
+
+                    <Grid Margin="20,46,20,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Grid Width="50" Height="50" VerticalAlignment="Center">
+                            <controls:ProgressRing x:Name="TimerRing" Thickness="4"/>
+                            <Path Data="{StaticResource TimerGeometry}" Style="{StaticResource LineIcon}" Width="18" Height="18"
+                                  Stroke="{StaticResource OrangeBrush}" StrokeThickness="1.6"/>
+                        </Grid>
+
+                        <StackPanel Grid.Column="1" Margin="14,0,8,0" VerticalAlignment="Center">
+                            <TextBlock x:Name="TimerRunningText" FontFamily="{StaticResource DisplayFont}" FontSize="32" FontWeight="Light"
+                                       Foreground="{StaticResource OrangeBrush}" Typography.NumeralAlignment="Tabular"/>
+                            <TextBlock x:Name="TimerRunningLabel" Margin="1,-3,0,0" FontSize="12" Foreground="{StaticResource SecondaryTextBrush}"/>
+                        </StackPanel>
+
+                        <Button Grid.Column="2" Style="{StaticResource CircleButton}" Content="Cancel" Click="OnTimerCancelClick"/>
+                        <Button x:Name="TimerPauseButton" Grid.Column="3" Margin="10,0,0,0" Style="{StaticResource CircleButton}" Click="OnTimerPauseClick"/>
+                    </Grid>
+                </Grid>
+
+                <!-- ─────────── To-do ─────────── -->
+                <!-- Its height follows the number of rows (see MainWindow.Todos.cs). -->
+                <Grid x:Name="TodoView" Style="{StaticResource View}" VerticalAlignment="Top" RenderTransformOrigin="0.5,0"
+                      Width="{x:Static local:IslandConfig.ExpandedWidth}" Height="{x:Static local:IslandConfig.TodoMaxHeight}">
+                    <Grid.RenderTransform>
+                        <ScaleTransform/>
+                    </Grid.RenderTransform>
+
+                    <Grid Margin="14,48,14,14">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>   <!-- the list -->
+                            <RowDefinition Height="8"/>
+                            <RowDefinition Height="32"/>  <!-- add a to-do -->
+                        </Grid.RowDefinitions>
+
+                        <TextBlock x:Name="TodoEmptyText" Margin="6,0" VerticalAlignment="Center" Text="No to-dos yet"
+                                   Foreground="{StaticResource TertiaryTextBrush}"/>
+                        <ScrollViewer x:Name="TodoScroller" Focusable="False" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl x:Name="TodoListView" Focusable="False" ItemTemplate="{StaticResource TodoRowTemplate}"/>
+                        </ScrollViewer>
+
+                        <Grid Grid.Row="2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Clicking here lets the island take keyboard focus; Enter adds, Esc gives focus back. -->
+                            <Border CornerRadius="10" Background="{StaticResource FieldBrush}" Cursor="IBeam"
+                                    PreviewMouseLeftButtonDown="OnTodoInputMouseDown">
+                                <Grid>
+                                    <Path Data="{StaticResource PlusGeometry}" Style="{StaticResource StrokePath}" Width="12" Height="12" Margin="11,0,0,0"
+                                          HorizontalAlignment="Left" VerticalAlignment="Center" Stroke="{StaticResource TertiaryTextBrush}"/>
+                                    <TextBlock x:Name="TodoPlaceholder" Margin="32,0,10,0" VerticalAlignment="Center" FontSize="13" Text="Add a to-do"
+                                               Foreground="{StaticResource TertiaryTextBrush}" IsHitTestVisible="False"/>
+                                    <TextBox x:Name="TodoInput" Margin="30,0,10,0" Style="{StaticResource IslandTextBox}" AutomationProperties.Name="Add a to-do"
+                                             PreviewKeyDown="OnTodoInputKeyDown" TextChanged="OnTodoInputTextChanged"/>
+                                </Grid>
+                            </Border>
+
+                            <Button x:Name="ClearDoneButton" Grid.Column="1" Margin="8,0,0,0" Style="{StaticResource PillButton}" Content="Clear done"
+                                    Foreground="{StaticResource SecondaryTextBrush}" Visibility="Collapsed" Click="OnClearDoneClick"/>
+                        </Grid>
+                    </Grid>
+                </Grid>
+
+                <!--
+                    ═══════════════ Expanded · shared header ═══════════════
+                    Like the iPhone's status bar: the time on the left, the battery on the right, and in the middle the
+                    page tabs. It stays in place while you switch pages; only the content below it cross-fades.
+                -->
+                <Grid x:Name="PageHeader" Width="{x:Static local:IslandConfig.ExpandedWidth}" Height="48" HorizontalAlignment="Center" VerticalAlignment="Top"
+                      Opacity="0" IsHitTestVisible="False">
+                    <Grid Margin="20,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel x:Name="HeaderClockPanel" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock x:Name="HeaderClockText" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" Typography.NumeralAlignment="Tabular"/>
+                            <TextBlock x:Name="HeaderDateText" Margin="7,0,0,0" VerticalAlignment="Center" FontSize="12" Foreground="{StaticResource SecondaryTextBrush}"/>
+                        </StackPanel>
+
+                        <!-- Now playing · Timer · To-do. The thumb slides under the selected tab. -->
+                        <Border Grid.Column="1" Padding="2" CornerRadius="12" Background="{StaticResource TabTrackBrush}">
+                            <Grid>
+                                <Border Width="32" Height="20" HorizontalAlignment="Left" CornerRadius="10" Background="{StaticResource TabThumbBrush}">
+                                    <Border.RenderTransform>
+                                        <TranslateTransform x:Name="TabThumbOffset"/>
+                                    </Border.RenderTransform>
+                                </Border>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button x:Name="MediaTab" Style="{StaticResource TabButton}" Click="OnTabClick" AutomationProperties.Name="Now playing">
+                                        <Path Data="{StaticResource MusicNoteGeometry}" Style="{StaticResource IconPath}" Width="10" Height="12" StrokeThickness="0.8"/>
+                                    </Button>
+                                    <Button x:Name="TimerTab" Style="{StaticResource TabButton}" Click="OnTabClick" AutomationProperties.Name="Timer">
+                                        <Path x:Name="TimerTabIcon" Data="{StaticResource TimerGeometry}" Style="{StaticResource LineIcon}" Width="13" Height="13" StrokeThickness="1.4"/>
+                                    </Button>
+                                    <Button x:Name="TodoTab" Style="{StaticResource TabButton}" Click="OnTabClick" AutomationProperties.Name="To-do">
+                                        <Path Data="{StaticResource ChecklistGeometry}" Style="{StaticResource LineIcon}" Width="14" Height="12" StrokeThickness="1.3"/>
+                                    </Button>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <StackPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Orientation="Horizontal">
+                            <StackPanel x:Name="HeaderWeatherPanel" Margin="0,0,12,0" Orientation="Horizontal" Visibility="Collapsed">
+                                <Image x:Name="HeaderWeatherIcon" Width="14" Height="14" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="HeaderWeatherText" Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12"
+                                           Foreground="{StaticResource SecondaryTextBrush}" Typography.NumeralAlignment="Tabular"/>
+                            </StackPanel>
+                            <StackPanel x:Name="HeaderBatteryPanel" Orientation="Horizontal">
+                                <TextBlock x:Name="HeaderBatteryText" Margin="0,0,6,0" VerticalAlignment="Center" FontSize="12" Typography.NumeralAlignment="Tabular"/>
+                                <controls:BatteryIcon x:Name="HeaderBatteryIcon" Width="24" Height="12" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </StackPanel>
                     </Grid>
                 </Grid>
             </Grid>

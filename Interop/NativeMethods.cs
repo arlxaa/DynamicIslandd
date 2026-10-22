@@ -4,8 +4,8 @@ using System.Text;
 namespace DynamicIsland.Interop;
 
 /// <summary>
-/// The Win32 functions the island needs: window styles, z-order, power notifications, fullscreen detection,
-/// a native context menu and working-set trimming.
+/// The Win32 functions the island needs: window styles, focus, z-order, power notifications, fullscreen
+/// detection, the timer sound and working-set trimming.
 /// </summary>
 internal static class NativeMethods
 {
@@ -34,7 +34,6 @@ internal static class NativeMethods
 
     // ─────────────── Window messages ───────────────
 
-    public const int WM_NULL = 0x0000;
     public const int WM_SETTINGCHANGE = 0x001A;
     public const int WM_TIMECHANGE = 0x001E;
     public const int WM_MOUSEACTIVATE = 0x0021;
@@ -54,12 +53,6 @@ internal static class NativeMethods
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct POINT
-    {
-        public int X, Y;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
     private struct MONITORINFO
     {
         public int cbSize;
@@ -76,12 +69,12 @@ internal static class NativeMethods
     public static extern bool SystemParametersInfo(int action, int param, out RECT result, int winIni);
 
     [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool GetCursorPos(out POINT point);
-
-    [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();
 
+    /// <summary>
+    /// Gives a window keyboard focus. Windows only allows this to the app that received the last input, which is
+    /// the island right after you click it (used to let you type a to-do, then to hand focus back).
+    /// </summary>
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool SetForegroundWindow(IntPtr hWnd);
@@ -143,31 +136,18 @@ internal static class NativeMethods
             && r.Right >= info.rcMonitor.Right && r.Bottom >= info.rcMonitor.Bottom;
     }
 
-    // ─────────────── Native context menu ───────────────
+    // ─────────────── Sound ───────────────
 
-    public const uint MF_STRING = 0x0000;
-    public const uint MF_CHECKED = 0x0008;
-    public const uint MF_SEPARATOR = 0x0800;
-    public const uint TPM_RIGHTBUTTON = 0x0002;
-    public const uint TPM_RETURNCMD = 0x0100;
+    public const uint SND_ASYNC = 0x0001;         // return at once and play in the background
+    public const uint SND_NODEFAULT = 0x0002;     // stay silent (no default beep) if the sound can't be found
+    public const uint SND_LOOP = 0x0008;          // repeat until stopped (needs SND_ASYNC)
+    public const uint SND_ALIAS = 0x00010000;     // a system sound name, such as "SystemExclamation"
+    public const uint SND_FILENAME = 0x00020000;  // a path to a .wav file
 
-    [DllImport("user32.dll")]
-    public static extern IntPtr CreatePopupMenu();
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    /// <summary>Plays a .wav file or a system sound. Passing null stops whatever this app is playing.</summary>
+    [DllImport("winmm.dll", EntryPoint = "PlaySoundW", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool AppendMenu(IntPtr menu, uint flags, nuint itemId, string? text);
-
-    [DllImport("user32.dll")]
-    public static extern int TrackPopupMenuEx(IntPtr menu, uint flags, int x, int y, IntPtr hWnd, IntPtr parameters);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool DestroyMenu(IntPtr menu);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool PostMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+    public static extern bool PlaySound(string? sound, IntPtr module, uint flags);
 
     // ─────────────── Power ───────────────
 
