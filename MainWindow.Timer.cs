@@ -194,9 +194,10 @@ public partial class MainWindow
         TimerPauseButton.Background = (Brush)FindResource(paused ? "GreenTintBrush" : "OrangeTintBrush");
         TimerPauseButton.Foreground = paused ? _greenBrush : _orangeBrush;
 
-        // Next to music, the countdown takes the equalizer's place in the pill.
+        // Next to music, the countdown takes the equalizer's place in the pill (a minimal pill grows a little for it).
         CompactMediaTimer.Visibility = _timer.IsActive ? Visibility.Visible : Visibility.Collapsed;
         CompactEqualizer.Visibility = _timer.IsActive ? Visibility.Collapsed : Visibility.Visible;
+        ApplyPillStyle();
 
         // A running timer tints its tab, so you can see it from the other pages.
         TimerTabIcon.Stroke = _timer.IsActive ? _orangeBrush : Brushes.White;

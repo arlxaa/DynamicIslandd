@@ -81,7 +81,7 @@ public partial class MainWindow
     /// <summary>The tray icon's menu: a standard Windows menu, like every other notification-area icon has.</summary>
     private void ShowTrayMenu()
     {
-        const int ShowHideItem = 1, StartupItem = 2, QuitItem = 3;
+        const int ShowHideItem = 1, FullPillItem = 2, MinimalPillItem = 3, StartupItem = 4, QuitItem = 5;
 
         IntPtr menu = NativeMethods.CreatePopupMenu();
         if (menu == IntPtr.Zero)
@@ -89,6 +89,10 @@ public partial class MainWindow
         try
         {
             NativeMethods.AppendMenu(menu, NativeMethods.MF_STRING, ShowHideItem, _hiddenByUser ? "Show Dynamic Island" : "Hide Dynamic Island");
+            NativeMethods.AppendMenu(menu, NativeMethods.MF_SEPARATOR, 0, null);
+            NativeMethods.AppendMenu(menu, NativeMethods.MF_STRING | (_minimalPill ? 0 : NativeMethods.MF_CHECKED), FullPillItem, "Pill: cover, title and visualizer");
+            NativeMethods.AppendMenu(menu, NativeMethods.MF_STRING | (_minimalPill ? NativeMethods.MF_CHECKED : 0), MinimalPillItem, "Pill: cover and visualizer");
+            NativeMethods.AppendMenu(menu, NativeMethods.MF_SEPARATOR, 0, null);
             NativeMethods.AppendMenu(menu, NativeMethods.MF_STRING | (StartupManager.IsEnabled ? NativeMethods.MF_CHECKED : 0), StartupItem, "Start with Windows");
             NativeMethods.AppendMenu(menu, NativeMethods.MF_SEPARATOR, 0, null);
             NativeMethods.AppendMenu(menu, NativeMethods.MF_STRING, QuitItem, "Quit Dynamic Island");
@@ -105,6 +109,10 @@ public partial class MainWindow
             {
                 case ShowHideItem:
                     SetHiddenByUser(!_hiddenByUser);
+                    break;
+                case FullPillItem:
+                case MinimalPillItem:
+                    SetMinimalPill(command == MinimalPillItem);
                     break;
                 case StartupItem:
                     SetStartWithWindows(!StartupManager.IsEnabled);

@@ -36,12 +36,30 @@ The island sits at the top center of your main screen and changes shape dependin
   </tr>
 </table>
 
+### Full or minimal pill
+
+Pick the pill style in the island's menu (or the tray icon's). The full pill shows the cover, the song title
+and the visualizer. The minimal one, like the iPhone, shows just the cover and the visualizer, and a timer just
+its ring and countdown, so the island stays small.
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/compact.png" width="344" alt="Full now-playing pill"><br><sub>Full</sub></td>
+    <td align="center"><img src="docs/screenshots/compact-minimal.png" width="140" alt="Minimal now-playing pill"><br><sub>Minimal</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/media-timer-pill.png" width="344" alt="Full pill with a timer"><br><sub>Full, with a timer</sub></td>
+    <td align="center"><img src="docs/screenshots/media-timer-pill-minimal.png" width="180" alt="Minimal pill with a timer"><br><sub>Minimal, with a timer</sub></td>
+  </tr>
+</table>
+
 ## Features
 
 - **Now playing, for any app.** Spotify, YouTube in your browser, and any other player that shows up in the
   Windows media controls (the media card you see when you press a volume key). You get album art, title,
   artist, progress and ⏮ ⏯ ⏭, plus an equalizer tinted with the album's colour. When several apps play,
-  Spotify wins; you can also limit it to Spotify only.
+  Spotify wins; you can also limit it to Spotify only. The pill can be full (cover, title, visualizer) or
+  minimal (cover and visualizer), as you like.
 - **Timer.** Pick a length and press Start. The countdown stays in the island, next to the song that's playing,
   and keeps going through sleep and restarts. When it's done, the island says so and plays a sound, even over a
   fullscreen app.
@@ -162,7 +180,7 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 | Tap it (touch screens) | It opens |
 | Click the tabs at the top | Switch between Now playing, Timer and To-do |
 | Click the album art | Brings Spotify to the front |
-| Right-click the open island | Menu: **Start with Windows** switch · **Hide island** · **Quit Dynamic Island** |
+| Right-click the open island | Menu: **Pill style** (full or minimal) · **Start with Windows** · **Hide island** · **Quit Dynamic Island** |
 | Click the tray icon, next to the clock | Hide or show the island. Right-click it for the same options |
 
 <img src="docs/screenshots/menu.png" width="280" alt="The right-click menu">
@@ -186,7 +204,7 @@ Every setting lives in [`IslandConfig.cs`](IslandConfig.cs). Change a value and 
 
 | Setting | Default | What it does |
 |---|---|---|
-| `DotSize`, `CompactWidth/Height`, `ExpandedWidth`, `…Height` | 14 · 300×36 · 420 · … | Size of each state, in DIPs |
+| `DotSize`, `CompactWidth/Height`, `Minimal…Width`, `ExpandedWidth`, `…Height` | 14 · 300×36 · 96 · 420 · … | Size of each state, in DIPs |
 | `TopMargin` | 6 | Gap between the top of the screen and the island |
 | `HoverPadding` | 8 | Invisible margin around the island that makes the small dot easy to reach. Set to `0` so only the visible shape counts |
 | `ClickThroughWhenCollapsed` | `true` | Clicks go through the small island to the window underneath, and it opens when the pointer rests on it. `false` = the classic behaviour: the island catches clicks, and hovering or clicking opens it |
@@ -247,6 +265,7 @@ Measured on Windows 11 at 125 % scaling:
 ├─ MainWindow.Timer.cs        timer page, countdown pill and "Timer done" alert
 ├─ MainWindow.Todos.cs        to-do page, and typing into the island
 ├─ MainWindow.Pointer.cs      making way: click-through and see-through, rest to open
+├─ MainWindow.PillStyle.cs    full or minimal pill
 ├─ MainWindow.Tray.cs         hiding and showing, the tray icon, starting it again, the Start menu entry
 ├─ IslandConfig.cs            all settings
 ├─ Services/                  Media · AudioVolume · Power · Weather · CountdownTimer · StateStore · TodoItem ·

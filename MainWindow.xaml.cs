@@ -132,8 +132,9 @@ public partial class MainWindow : Window
 
         // What the island remembers between runs: the to-do list and a running timer.
         SavedState saved = StateStore.Load();
+        _minimalPill = saved.MinimalPill;
         InitializeTodos(saved);
-        InitializeTimer(saved);
+        InitializeTimer(saved); // also lays out the pills for the saved style
         _startMenuShortcutCreated = saved.StartMenuShortcutCreated;
         InitializePointer();
         Version? version = typeof(MainWindow).Assembly.GetName().Version;
@@ -302,6 +303,7 @@ public partial class MainWindow : Window
         Todos = _todos.Select(todo => new SavedTodo(todo.Text, todo.IsDone)).ToList(),
         Timer = _timer.Save(),
         LastTimerMinutes = _timerMinutes,
+        MinimalPill = _minimalPill,
         StartMenuShortcutCreated = _startMenuShortcutCreated,
     });
 

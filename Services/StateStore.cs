@@ -12,6 +12,9 @@ public sealed class SavedState
     public SavedTimer? Timer { get; set; }
     public int LastTimerMinutes { get; set; } = 5;
 
+    /// <summary>The pill shows just the cover and the visualizer (no song title), like the iPhone.</summary>
+    public bool MinimalPill { get; set; }
+
     /// <summary>The Start menu entry was made once; if you delete it, it stays deleted.</summary>
     public bool StartMenuShortcutCreated { get; set; }
 }

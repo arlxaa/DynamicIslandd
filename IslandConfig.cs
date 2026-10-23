@@ -17,8 +17,16 @@ public static class IslandConfig
     public const double CompactWidth = 300;
     public const double CompactHeight = 36;
 
-    /// <summary>The pill of a running timer when no music is playing: just a progress ring and the countdown.</summary>
+    /// <summary>The pill of a running timer when no music is playing: a progress ring, "Timer" and the countdown.</summary>
     public const double CompactTimerWidth = 236;
+
+    /// <summary>
+    /// The minimal pill style (chosen in the island's menu), like the iPhone: now playing shows just the cover and
+    /// the visualizer, and a timer just its ring and countdown.
+    /// </summary>
+    public const double MinimalMediaWidth = 96;
+    public const double MinimalMediaTimerWidth = 136; // cover, then the timer's ring and countdown
+    public const double MinimalTimerWidth = 112;
 
     /// <summary>The card shown on hover or click. All its pages share this width and one header (clock, page tabs, battery).</summary>
     public const double ExpandedWidth = 420;
@@ -41,7 +49,7 @@ public static class IslandConfig
 
     /// <summary>The menu you get with a right-click.</summary>
     public const double MenuWidth = 280;
-    public const double MenuHeight = 132;
+    public const double MenuHeight = 171;
 
     /// <summary>The pills and the dot are fully round; bigger shapes' corners stop growing at this radius.</summary>
     public const double MaxCornerRadius = 30;
