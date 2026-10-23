@@ -22,7 +22,7 @@ The island sits at the top center of your main screen and changes shape dependin
 |---|---|---|
 | **Dot** | nothing is happening | a small black circle |
 | **Pill** | something is happening | now playing · a running timer · volume change · charger plugged in |
-| **Expanded** | you hover over or click it | three pages (now playing, timer, to-do) under a header with the clock and battery |
+| **Expanded** | you rest the pointer on it | three pages (now playing, timer, to-do) under a header with the clock and battery |
 | **Alert** | a timer runs out | "Timer done" with a sound, until you stop it |
 
 <table>
@@ -55,19 +55,23 @@ The island sits at the top center of your main screen and changes shape dependin
 - **Apple-style type, everywhere.** Apple's SF Pro if it's installed, otherwise the bundled Inter, an open-source
   look-alike. As on the iPhone, the Text cut is used below 20 px and the Display cut above, with tabular figures
   for numbers that change. Icons, weather symbols included, are drawn in the style of SF Symbols, and even the
-  right-click menu lives inside the island, so no Windows system font shows up anywhere.
-- **Stays out of your way.**
-  - Click-through everywhere except the island itself.
+  island's menu lives inside the island, so no Windows system font shows up in it.
+- **Never in the way.**
+  - Clicks go straight through the small island (the dot or a pill) to whatever is underneath, like a browser
+    tab, and it turns see-through while your pointer is over it, so you can see what you're clicking. To open it,
+    rest the pointer on it for a moment.
+  - Hide it whenever you like from its menu or the tray icon, and bring it back with one click.
   - Never takes the keyboard from the app you're using, except while you type a to-do.
   - Hidden from Alt+Tab and the taskbar.
   - Fades out while a fullscreen game, video or presentation is in front.
 - **Smooth, iOS-like motion.** Spring animations with a little overshoot, and corners that morph with the shape.
 - **Light on resources.** About 5 MB in Task Manager when idle, fully event-driven, and zero NuGet packages.
-- **Start with Windows** from the right-click menu.
+- **Start with Windows** from the menu, which also puts Dynamic Island in your Start menu.
 
 ## Timer and to-do list
 
-Hover over the island and use the tabs at the top to switch between **Now playing**, **Timer** and **To-do**.
+Rest the pointer on the island to open it, then use the tabs at the top to switch between **Now playing**,
+**Timer** and **To-do**.
 
 <table>
   <tr>
@@ -113,7 +117,8 @@ Get the latest version from the [Releases](../../releases) page. There are two z
 
 1. Unzip it anywhere, for example `C:\Apps\DynamicIsland`.
 2. Run `DynamicIsland.exe`.
-3. Right-click the island and turn on **Start with Windows**.
+3. Right-click its tray icon (next to the clock) and turn on **Start with Windows**. This also adds it to the
+   Start menu.
 
 If you move the folder later, run the exe from its new location and turn **Start with Windows** on again.
 
@@ -152,16 +157,26 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 
 | Do this | To get this |
 |---|---|
-| Hover over the island (about 0.2 s) | It expands; move away and it collapses |
-| Click the island | It expands right away (handy on touch screens) |
+| Move the pointer onto the small island | It turns see-through and lets your clicks through to the window underneath (a browser tab, say) |
+| Rest the pointer on it for a moment (about 0.6 s), without clicking | It opens; move away and it closes |
+| Tap it (touch screens) | It opens |
 | Click the tabs at the top | Switch between Now playing, Timer and To-do |
 | Click the album art | Brings Spotify to the front |
-| Right-click the island | Menu: **Start with Windows** switch · **Quit Dynamic Island** |
+| Right-click the open island | Menu: **Start with Windows** switch · **Hide island** · **Quit Dynamic Island** |
+| Click the tray icon, next to the clock | Hide or show the island. Right-click it for the same options |
 
 <img src="docs/screenshots/menu.png" width="280" alt="The right-click menu">
 
-"Start with Windows" adds a per-user startup entry (no admin rights needed). You'll see it in
-Task Manager → Startup apps.
+After a click on something underneath, the island stays out of the way until your pointer leaves it, so you
+can close tab after tab without it opening.
+
+"Start with Windows" adds a per-user startup entry (no admin rights needed; you'll see it in Task Manager →
+Startup apps) and a **Dynamic Island** entry in the Start menu. So after you quit, press <kbd>Win</kbd>, type
+"Dynamic" and press <kbd>Enter</kbd> to start it again. Starting it while it's already running, but hidden,
+brings it back into view.
+
+> On Windows 11, new tray icons start out in the hidden overflow area (the **˄** next to the clock). Drag the
+> island icon onto the taskbar to keep it in view.
 
 Your to-dos and a running timer are saved in `%LOCALAPPDATA%\DynamicIsland\state.json`.
 
@@ -173,8 +188,11 @@ Every setting lives in [`IslandConfig.cs`](IslandConfig.cs). Change a value and 
 |---|---|---|
 | `DotSize`, `CompactWidth/Height`, `ExpandedWidth`, `…Height` | 14 · 300×36 · 420 · … | Size of each state, in DIPs |
 | `TopMargin` | 6 | Gap between the top of the screen and the island |
-| `HoverPadding` | 8 | Invisible margin around the island that makes the small dot easy to hover. Set to `0` so only the visible shape catches the mouse |
-| `HoverExpandDelay` / `HoverCollapseDelay` | 160 / 320 ms | How long to hover before it expands, and how long it waits before collapsing |
+| `HoverPadding` | 8 | Invisible margin around the island that makes the small dot easy to reach. Set to `0` so only the visible shape counts |
+| `ClickThroughWhenCollapsed` | `true` | Clicks go through the small island to the window underneath, and it opens when the pointer rests on it. `false` = the classic behaviour: the island catches clicks, and hovering or clicking opens it |
+| `RestToOpenDelay` | 600 ms | How long the pointer must rest on the small island before it opens |
+| `HoverExpandDelay` / `HoverCollapseDelay` | 160 / 320 ms | Classic behaviour: how long to hover before it expands. Both: how long it waits before collapsing |
+| `ShowTrayIcon` | `true` | The icon next to the clock that hides and shows the island |
 | `MediaSource` | `PreferSpotify` | `PreferSpotify` (whatever is playing, Spotify first) · `SpotifyOnly` · `AnyApp` (Windows' current session) |
 | `TimerPresets` | 1, 3, 5, 10, 15, 25, 30, 60 | The quick picks on the timer page, in minutes |
 | `TimerMaxMinutes` | 720 | The longest timer you can set |
@@ -193,7 +211,9 @@ No NuGet packages are used; everything is built on APIs that ship with Windows:
 
 | Part | Built on |
 |---|---|
-| Window | A transparent, topmost WPF window. Windows sends clicks on fully transparent pixels of a layered window to the app underneath, so only the island is clickable. `WS_EX_NOACTIVATE` and `WS_EX_TOOLWINDOW` keep it from taking focus and hide it from Alt+Tab. The to-do box asks for keyboard focus only when you click it, and gives it back to your app when you're done. |
+| Window | A transparent, topmost WPF window. Windows sends clicks on fully transparent pixels of a layered window to the app underneath, so only the island itself can be hit, and while the pointer is on the small island `WS_EX_TRANSPARENT` makes even that click-through. `WS_EX_NOACTIVATE` and `WS_EX_TOOLWINDOW` keep it from taking focus and hide it from Alt+Tab. The to-do box asks for keyboard focus only when you click it, and gives it back to your app when you're done. |
+| Pointer | While the island is click-through it gets no mouse input, so [`Services/PointerWatcher.cs`](Services/PointerWatcher.cs) follows the pointer with a low-level mouse hook: on its own thread, so it can never slow down your mouse, and installed only while the pointer is over the island. |
+| Tray icon | `Shell_NotifyIcon`, using the island's own window for its messages ([`Services/TrayIcon.cs`](Services/TrayIcon.cs)). Starting the app a second time signals the running copy to show itself. |
 | Media | Windows' Global System Media Transport Controls (`Windows.Media.Control`). This is local and push-based, needs no Spotify developer account or login, and the controls work on free Spotify accounts too. |
 | Volume | Core Audio (`IAudioEndpointVolume` plus device-change notifications), through a few lines of COM interop in [`Interop/CoreAudio.cs`](Interop/CoreAudio.cs). |
 | Battery | `RegisterPowerSettingNotification`, so Windows notifies the app on every 1 % change and on plug/unplug. |
@@ -207,6 +227,7 @@ No NuGet packages are used; everything is built on APIs that ship with Windows:
 Everything is event-driven:
 - The only always-running timer fires once a minute, for the clock. A running countdown adds one wake-up per second.
 - The equalizer animates only while music is playing and visible, at 30 fps.
+- The pointer hook exists only while your pointer is over the small island.
 - Every timer, COM callback, WinRT event and power registration is released on exit.
 
 Measured on Windows 11 at 125 % scaling:
@@ -225,11 +246,16 @@ Measured on Windows 11 at 125 % scaling:
 ├─ MainWindow.xaml.cs         state machine, morph animations, window plumbing, media, menu
 ├─ MainWindow.Timer.cs        timer page, countdown pill and "Timer done" alert
 ├─ MainWindow.Todos.cs        to-do page, and typing into the island
+├─ MainWindow.Pointer.cs      making way: click-through and see-through, rest to open
+├─ MainWindow.Tray.cs         hiding and showing, the tray icon, starting it again, the Start menu entry
 ├─ IslandConfig.cs            all settings
-├─ Services/                  Media · AudioVolume · Power · Weather · CountdownTimer · StateStore · TodoItem
+├─ Services/                  Media · AudioVolume · Power · Weather · CountdownTimer · StateStore · TodoItem ·
+│                             PointerWatcher · TrayIcon
 ├─ Interop/                   Win32 and Core Audio declarations
-├─ Helpers/                   SpringEase · ColorExtractor · OneShotTimer · StartupManager · AlarmSound · …
+├─ Helpers/                   SpringEase · ColorExtractor · OneShotTimer · StartupManager · StartMenuShortcut ·
+│                             AlarmSound · …
 ├─ Controls/                  BatteryIcon · ProgressRing (drawn in code, no templates)
+├─ Assets/                    the app icon
 ├─ Fonts/                     Inter and Inter Display (SIL Open Font License)
 └─ docs/screenshots/          images used in this README
 ```
@@ -239,11 +265,15 @@ Measured on Windows 11 at 125 % scaling:
 - **Spotify doesn't show up.** Use the Spotify desktop app or the Microsoft Store version. The web player
   shows up as your browser instead, which works too. If the Windows media card (press a volume key) shows
   your player, the island will too.
+- **The island opens when I don't want it to.** It opens when the pointer rests on it; raise
+  `RestToOpenDelay`, or hide it for a while from the tray icon.
+- **I can't find the tray icon.** On Windows 11 it may be in the overflow area: click the **˄** next to the
+  clock, then drag the icon onto the taskbar.
 - **Typing a to-do does nothing.** Click inside the **Add a to-do** box first: the island only takes the
   keyboard while you type there.
 - **No sound when a timer ends.** Check your volume, and that `TimerSound` points to an existing `.wav` file.
-- **Starting it again does nothing.** Only one copy runs at a time. Look for the dot at the top center of
-  your *main* monitor.
+- **Starting it again only shows the island.** Only one copy runs at a time: starting it again brings the
+  running one into view, at the top center of your *main* monitor.
 - **Something else is wrong.** Errors are written to `%LOCALAPPDATA%\DynamicIsland\log.txt`; include that
   file when you open an issue.
 

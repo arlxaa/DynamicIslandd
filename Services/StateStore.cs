@@ -11,6 +11,9 @@ public sealed class SavedState
     public List<SavedTodo> Todos { get; set; } = new();
     public SavedTimer? Timer { get; set; }
     public int LastTimerMinutes { get; set; } = 5;
+
+    /// <summary>The Start menu entry was made once; if you delete it, it stays deleted.</summary>
+    public bool StartMenuShortcutCreated { get; set; }
 }
 
 public sealed record SavedTodo(string Text, bool Done);

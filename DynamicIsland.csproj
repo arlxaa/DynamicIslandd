@@ -22,6 +22,8 @@
     <Description>A lightweight, native Dynamic Island for Windows: now playing, timer, to-do list, volume, battery and clock.</Description>
     <Authors>Celestyn Aurelixia</Authors>
     <Copyright>Copyright © 2026 Celestyn Aurelixia</Copyright>
+    <!-- The exe's icon, also used for the notification-area icon and the Start menu entry. -->
+    <ApplicationIcon>Assets\DynamicIsland.ico</ApplicationIcon>
 
     <!-- ===== Low-memory runtime tuning ===== -->
     <!-- No background GC thread: a small, mostly idle UI app gains nothing from concurrent GC. -->

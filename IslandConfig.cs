@@ -41,7 +41,7 @@ public static class IslandConfig
 
     /// <summary>The menu you get with a right-click.</summary>
     public const double MenuWidth = 280;
-    public const double MenuHeight = 93;
+    public const double MenuHeight = 132;
 
     /// <summary>The pills and the dot are fully round; bigger shapes' corners stop growing at this radius.</summary>
     public const double MaxCornerRadius = 30;
@@ -67,7 +67,18 @@ public static class IslandConfig
 
     // ─────────────── Behaviour ───────────────
 
-    /// <summary>Hover intent: the pointer must rest this long before the island expands (stops accidental pops).</summary>
+    /// <summary>
+    /// Make way for the apps underneath. While the island is small (the dot or a pill), clicks go straight through
+    /// it to the window below, such as a browser tab, and it turns see-through while the pointer is over it, so you
+    /// can see what you are clicking. To open it, rest the pointer on it without clicking (see RestToOpenDelay).
+    /// Set to false for the classic behaviour: the island catches clicks, and hovering or clicking opens it.
+    /// </summary>
+    public static readonly bool ClickThroughWhenCollapsed = true;
+
+    /// <summary>How long the pointer must rest on the small island, without clicking, before it opens.</summary>
+    public static readonly TimeSpan RestToOpenDelay = TimeSpan.FromMilliseconds(600);
+
+    /// <summary>Classic behaviour only: how long to hover before the island expands.</summary>
     public static readonly TimeSpan HoverExpandDelay = TimeSpan.FromMilliseconds(160);
 
     /// <summary>Grace period after the pointer leaves before the island collapses.</summary>
@@ -88,6 +99,9 @@ public static class IslandConfig
     /// <summary>Fade the island out while a fullscreen app (game, video, F11 browser) is in front. A finished timer still shows.</summary>
     public static readonly bool HideWhenFullscreen = true;
     public static readonly TimeSpan FullscreenCheckInterval = TimeSpan.FromSeconds(1.5);
+
+    /// <summary>An icon in the notification area (next to the clock): click it to hide or show the island.</summary>
+    public static readonly bool ShowTrayIcon = true;
 
     // ─────────────── Media ───────────────
 

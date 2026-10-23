@@ -4,14 +4,15 @@ using System.Text;
 namespace DynamicIsland.Interop;
 
 /// <summary>
-/// The Win32 functions the island needs: window styles, focus, z-order, power notifications, fullscreen
-/// detection, the timer sound and working-set trimming.
+/// The Win32 functions the island needs: window styles, focus, z-order, the pointer hook, the notification-area
+/// icon and its menu, power notifications, fullscreen detection, the timer sound and working-set trimming.
 /// </summary>
 internal static class NativeMethods
 {
     // ─────────────── Window styles & z-order ───────────────
 
     public const int GWL_EXSTYLE = -20;
+    public const int WS_EX_TRANSPARENT = 0x00000020; // with WS_EX_LAYERED: the mouse goes straight through to the window underneath
     public const int WS_EX_TOOLWINDOW = 0x00000080;  // not in Alt+Tab, not in the taskbar, visible on every virtual desktop
     public const int WS_EX_APPWINDOW = 0x00040000;
     public const int WS_EX_NOACTIVATE = 0x08000000;  // clicking the island never steals focus from your app
@@ -34,15 +35,29 @@ internal static class NativeMethods
 
     // ─────────────── Window messages ───────────────
 
+    public const int WM_NULL = 0x0000;
+    public const int WM_QUIT = 0x0012;
     public const int WM_SETTINGCHANGE = 0x001A;
     public const int WM_TIMECHANGE = 0x001E;
     public const int WM_MOUSEACTIVATE = 0x0021;
     public const int WM_DISPLAYCHANGE = 0x007E;
+    public const int WM_MOUSEMOVE = 0x0200;
+    public const int WM_LBUTTONDOWN = 0x0201;
+    public const int WM_LBUTTONUP = 0x0202;
+    public const int WM_RBUTTONDOWN = 0x0204;
+    public const int WM_RBUTTONUP = 0x0205;
+    public const int WM_MBUTTONDOWN = 0x0207;
+    public const int WM_XBUTTONDOWN = 0x020B;
     public const int WM_POWERBROADCAST = 0x0218;
+    public const int WM_APP = 0x8000;
     public const int MA_NOACTIVATE = 3;
     public const int SPI_SETWORKAREA = 0x002F;
     public const int SPI_GETWORKAREA = 0x0030;
     public const int PBT_APMRESUMEAUTOMATIC = 0x0012;
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool PostMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
     // ─────────────── Geometry ───────────────
 
@@ -51,6 +66,20 @@ internal static class NativeMethods
     {
         public int Left, Top, Right, Bottom;
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POINT
+    {
+        public int X, Y;
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetCursorPos(out POINT point);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool ScreenToClient(IntPtr hWnd, ref POINT point);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct MONITORINFO
@@ -135,6 +164,120 @@ internal static class NativeMethods
         return r.Left <= info.rcMonitor.Left && r.Top <= info.rcMonitor.Top
             && r.Right >= info.rcMonitor.Right && r.Bottom >= info.rcMonitor.Bottom;
     }
+
+    // ─────────────── Pointer hook (see Services/PointerWatcher.cs) ───────────────
+
+    public const int WH_MOUSE_LL = 14;
+
+    /// <summary>lParam points to an MSLLHOOKSTRUCT, which starts with the pointer position (POINT).</summary>
+    public delegate IntPtr LowLevelMouseProc(int code, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern IntPtr SetWindowsHookEx(int hookType, LowLevelMouseProc proc, IntPtr module, uint threadId);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool UnhookWindowsHookEx(IntPtr hook);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr CallNextHookEx(IntPtr hook, int code, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetModuleHandleW")]
+    public static extern IntPtr GetModuleHandle(string? moduleName);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MSG
+    {
+        public IntPtr hwnd;
+        public int message;
+        public IntPtr wParam;
+        public IntPtr lParam;
+        public int time;
+        public POINT pt;
+    }
+
+    [DllImport("user32.dll")]
+    public static extern int GetMessage(out MSG msg, IntPtr hWnd, int filterMin, int filterMax);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool PeekMessage(out MSG msg, IntPtr hWnd, int filterMin, int filterMax, int remove);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool PostThreadMessage(uint threadId, int msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("kernel32.dll")]
+    public static extern uint GetCurrentThreadId();
+
+    // ─────────────── Notification-area icon and its menu (see Services/TrayIcon.cs) ───────────────
+
+    public const int NIM_ADD = 0, NIM_MODIFY = 1, NIM_DELETE = 2;
+    public const int NIF_MESSAGE = 0x1, NIF_ICON = 0x2, NIF_TIP = 0x4;
+    public const int SM_CXSMICON = 49;
+    public static readonly IntPtr IDI_APPLICATION = new(32512);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct NOTIFYICONDATA
+    {
+        public int cbSize;
+        public IntPtr hWnd;
+        public int uID;
+        public int uFlags;
+        public int uCallbackMessage;
+        public IntPtr hIcon;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string szTip;
+        public int dwState;
+        public int dwStateMask;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string szInfo;
+        public int uTimeoutOrVersion;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)] public string szInfoTitle;
+        public int dwInfoFlags;
+        public Guid guidItem;
+        public IntPtr hBalloonIcon;
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, EntryPoint = "Shell_NotifyIconW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool Shell_NotifyIcon(int message, ref NOTIFYICONDATA data);
+
+    /// <summary>"TaskbarCreated" is broadcast when Explorer (re)starts; notification-area icons must then be added again.</summary>
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "RegisterWindowMessageW")]
+    public static extern int RegisterWindowMessage(string name);
+
+    /// <summary>Extracts an icon from a file at an exact size (low word of <paramref name="size"/>, in pixels).</summary>
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, EntryPoint = "SHDefExtractIconW")]
+    public static extern int SHDefExtractIcon(string iconFile, int index, uint flags, out IntPtr largeIcon, IntPtr smallIcon, uint size);
+
+    [DllImport("user32.dll", EntryPoint = "LoadIconW")]
+    public static extern IntPtr LoadIcon(IntPtr instance, IntPtr name);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool DestroyIcon(IntPtr icon);
+
+    [DllImport("user32.dll")]
+    public static extern int GetSystemMetrics(int index);
+
+    public const uint MF_STRING = 0x0000;
+    public const uint MF_CHECKED = 0x0008;
+    public const uint MF_SEPARATOR = 0x0800;
+    public const uint TPM_RIGHTBUTTON = 0x0002;
+    public const uint TPM_RETURNCMD = 0x0100;
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr CreatePopupMenu();
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "AppendMenuW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool AppendMenu(IntPtr menu, uint flags, nuint itemId, string? text);
+
+    [DllImport("user32.dll")]
+    public static extern int TrackPopupMenuEx(IntPtr menu, uint flags, int x, int y, IntPtr hWnd, IntPtr parameters);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool DestroyMenu(IntPtr menu);
 
     // ─────────────── Sound ───────────────
 

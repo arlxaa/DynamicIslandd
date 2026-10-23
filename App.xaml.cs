@@ -11,15 +11,30 @@ namespace DynamicIsland;
 /// </summary>
 public partial class App : Application
 {
+    private const string InstanceName = @"Local\DynamicIsland.SingleInstance";
+    private const string ShowSignalName = @"Local\DynamicIsland.Show";
+
     private Mutex? _instanceMutex;
     private bool _ownsMutex;
+    private EventWaitHandle? _showSignal;
+    private RegisteredWaitHandle? _showWait;
 
     protected override void OnStartup(StartupEventArgs e)
     {
-        // Only one island at a time (e.g. "Start with Windows" plus a manual launch).
-        _instanceMutex = new Mutex(initiallyOwned: true, @"Local\DynamicIsland.SingleInstance", out _ownsMutex);
+        // Only one island at a time (e.g. "Start with Windows" plus a manual launch). Starting it again while it
+        // runs (from the Start menu, say) brings the running island back into view, even if it was hidden.
+        _instanceMutex = new Mutex(initiallyOwned: true, InstanceName, out _ownsMutex);
         if (!_ownsMutex)
         {
+            try
+            {
+                using EventWaitHandle running = EventWaitHandle.OpenExisting(ShowSignalName);
+                running.Set();
+            }
+            catch
+            {
+                // The other copy is still starting up or shutting down; nothing to show.
+            }
             Shutdown();
             return;
         }
@@ -37,11 +52,18 @@ public partial class App : Application
         var window = new MainWindow();
         MainWindow = window;
         window.Show();
+
+        // A thread-pool wait costs nothing until the signal arrives.
+        _showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, ShowSignalName);
+        _showWait = ThreadPool.RegisterWaitForSingleObject(_showSignal,
+            (_, _) => window.Dispatcher.BeginInvoke(new Action(window.ShowOnRequest)), null, Timeout.Infinite, executeOnlyOnce: false);
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
         TaskScheduler.UnobservedTaskException -= OnUnobservedTaskException;
+        _showWait?.Unregister(null);
+        _showSignal?.Dispose();
         if (_ownsMutex)
             _instanceMutex?.ReleaseMutex();
         _instanceMutex?.Dispose();

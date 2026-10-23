@@ -79,8 +79,8 @@ public partial class MainWindow : Window
     private bool _menuOpen;                // the right-click menu is up (it counts as expanded)
     private Hud _hud = Hud.None;           // a transient announcement is up
     private bool _showMediaPill;           // music is playing (or was paused only moments ago)
-    private bool _fullscreenInFront;       // a fullscreen app is in front...
-    private bool _hiddenForFullscreen;     // ...so the island stays out of the way (unless a timer is ringing)
+    private bool _fullscreenInFront;       // a fullscreen app is in front (or you hid the island)...
+    private bool _hidden;                  // ...so the island stays out of the way (unless a timer is ringing)
     private FrameworkElement? _activeView; // null = dot
     private readonly FrameworkElement[] _views;
     private readonly FrameworkElement[] _pageViews;  // the expanded pages, which share the header
@@ -134,6 +134,8 @@ public partial class MainWindow : Window
         SavedState saved = StateStore.Load();
         InitializeTodos(saved);
         InitializeTimer(saved);
+        _startMenuShortcutCreated = saved.StartMenuShortcutCreated;
+        InitializePointer();
         Version? version = typeof(MainWindow).Assembly.GetName().Version;
         VersionText.Text = version is null ? "" : "v" + version.ToString(3);
 
@@ -172,6 +174,7 @@ public partial class MainWindow : Window
         _hwndSource?.AddHook(WndProc);
 
         _power.Attach(_hwnd); // battery notifications arrive as window messages
+        InitializeTray();      // so does the tray icon's input
         PositionAtTopCenter();
     }
 
@@ -193,6 +196,7 @@ public partial class MainWindow : Window
             _ = RefreshWeatherAsync();
         if (IslandConfig.TrimMemoryWhenIdle)
             _trimTimer.Schedule(TimeSpan.FromSeconds(10), TrimMemory);
+        _ = Dispatcher.InvokeAsync(EnsureStartMenuShortcut, DispatcherPriority.ApplicationIdle);
 
         await _media.StartAsync(); // if music is already playing, OnMediaChanged morphs us into the pill
     }
@@ -216,6 +220,8 @@ public partial class MainWindow : Window
             _equalizer?.Stop(this);
         DisposeTimer();
         DisposeTodos();
+        DisposePointer();
+        DisposeTray();
 
         _media.Changed -= OnMediaChanged;
         _media.Dispose();
@@ -233,6 +239,12 @@ public partial class MainWindow : Window
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (_tray is not null && _tray.HandleMessage(msg, lParam))
+        {
+            handled = true;
+            return IntPtr.Zero;
+        }
+
         switch (msg)
         {
             case NativeMethods.WM_MOUSEACTIVATE:
@@ -290,6 +302,7 @@ public partial class MainWindow : Window
         Todos = _todos.Select(todo => new SavedTodo(todo.Text, todo.IsDone)).ToList(),
         Timer = _timer.Save(),
         LastTimerMinutes = _timerMinutes,
+        StartMenuShortcutCreated = _startMenuShortcutCreated,
     });
 
     // ═══════════════════════════════ State → presentation ═══════════════════════════════
@@ -332,10 +345,16 @@ public partial class MainWindow : Window
             FrameworkElement? previous = _activeView;
             _activeView = view;
             MorphTo(previous, view);
+            if (IsBig(previous) && !IsBig(view))
+                MakeWayIfPointerIsOver(); // shrank under a resting pointer: don't block what's underneath
         }
         UpdateEqualizer();
         UpdateProgressTimer();
+        UpdateMakeWay();
     }
+
+    /// <summary>The card, the menu or the alert: the shapes that take clicks.</summary>
+    private bool IsBig(FrameworkElement? view) => IsPage(view) || view == MenuView || view == TimerAlertView;
 
     /// <summary>
     /// Animates the island to the size of <paramref name="view"/> (or the dot) and cross-fades the content.
@@ -489,7 +508,7 @@ public partial class MainWindow : Window
 
     private void ShowHud(Hud hud, TimeSpan duration)
     {
-        if (_expanded || _hiddenForFullscreen)
+        if (_expanded || _hidden)
             return;
         _hud = hud;
         _hudTimer.Schedule(duration, () =>
@@ -506,7 +525,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void UpdateEqualizer()
     {
-        bool run = !_hiddenForFullscreen
+        bool run = !_hidden
                    && _media.Current is { IsPlaying: true }
                    && (_activeView == ExpandedMediaView || (_activeView == CompactMediaView && !_timer.IsActive));
         if (run == _equalizerRunning || _equalizer is null)
@@ -525,8 +544,10 @@ public partial class MainWindow : Window
     {
         if (_expanded)
             _hoverTimer.Cancel(); // came back during the collapse grace period
+        else if (_pointer is not null && e.StylusDevice is null && IsSmall)
+            MakeWay();            // see-through and click-through; rest the pointer to open (MainWindow.Pointer.cs)
         else
-            _hoverTimer.Schedule(IslandConfig.HoverExpandDelay, () => SetExpanded(true));
+            _hoverTimer.Schedule(IslandConfig.HoverExpandDelay, () => SetExpanded(true)); // classic, or touch
     }
 
     private void OnHitZoneMouseLeave(object sender, MouseEventArgs e)
@@ -545,8 +566,8 @@ public partial class MainWindow : Window
             _timer.Stop();              // a click on the alert dismisses it
         else if (_menuOpen)
             CloseMenu();
-        else if (!_expanded)
-            SetExpanded(true);          // a click (or a tap on a touch screen) opens it; moving away closes it
+        else if (!_expanded && (_pointer is null || e.StylusDevice is not null))
+            SetExpanded(true);          // a click (classic) or a tap on a touch screen opens it; moving away closes it
     }
 
     private void OnHitZoneRightClick(object sender, MouseButtonEventArgs e)
@@ -580,7 +601,7 @@ public partial class MainWindow : Window
 
     private void OnStartupToggleClick(object sender, RoutedEventArgs e)
     {
-        StartupManager.IsEnabled = !StartupManager.IsEnabled;
+        SetStartWithWindows(!StartupManager.IsEnabled);
         SetStartupSwitch(StartupManager.IsEnabled, animate: true); // read back: shows the truth if the change failed
     }
 
@@ -831,22 +852,25 @@ public partial class MainWindow : Window
         IdleWeatherText.Text = weather.Description;
     }
 
-    // ═══════════════════════════════ Fullscreen & memory ═══════════════════════════════
+    // ═══════════════════════════════ Hiding, fullscreen & memory ═══════════════════════════════
 
     private void OnFullscreenTick(object? sender, EventArgs e)
     {
         _fullscreenInFront = NativeMethods.IsFullscreenAppInForeground(_hwnd);
-        UpdateFullscreenHiding();
+        UpdateHiding();
     }
 
-    /// <summary>Hides the island while a fullscreen app is in front, except when a finished timer needs your attention.</summary>
-    private void UpdateFullscreenHiding()
+    /// <summary>
+    /// Hides the island while a fullscreen app is in front or after you chose "Hide island", except when a finished
+    /// timer needs your attention.
+    /// </summary>
+    private void UpdateHiding()
     {
-        bool hide = _fullscreenInFront && _timer.Phase != TimerPhase.Ringing;
-        if (hide == _hiddenForFullscreen)
+        bool hide = (_fullscreenInFront || _hiddenByUser) && _timer.Phase != TimerPhase.Ringing;
+        if (hide == _hidden)
             return;
 
-        _hiddenForFullscreen = hide;
+        _hidden = hide;
         if (hide)
         {
             _hoverTimer.Cancel();
@@ -854,6 +878,7 @@ public partial class MainWindow : Window
             _expanded = false;
             _menuOpen = false;
             _hud = Hud.None;
+            EndTyping(restoreFocus: true);
         }
         else
         {

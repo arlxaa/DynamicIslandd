@@ -154,7 +154,7 @@ public partial class MainWindow
         }
 
         UpdateTimerControls();
-        UpdateFullscreenHiding(); // a ringing timer shows even over a fullscreen app
+        UpdateHiding(); // a ringing timer shows even over a fullscreen app, or when you hid the island
         UpdatePresentation();
         SaveState();
     }

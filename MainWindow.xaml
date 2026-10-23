@@ -812,6 +812,15 @@
                             </Grid>
                         </Button>
                         <Rectangle Height="1" Margin="14,0" Fill="{StaticResource SeparatorBrush}"/>
+                        <!-- Hides the island without quitting: the tray icon (or starting it again) brings it back -->
+                        <Button Style="{StaticResource MenuRow}" Click="OnHideClick">
+                            <Grid>
+                                <TextBlock VerticalAlignment="Center" Text="Hide island"/>
+                                <TextBlock x:Name="HideHintText" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="11"
+                                           Foreground="{StaticResource TertiaryTextBrush}"/>
+                            </Grid>
+                        </Button>
+                        <Rectangle Height="1" Margin="14,0" Fill="{StaticResource SeparatorBrush}"/>
                         <Button Style="{StaticResource MenuRow}" Click="OnQuitClick">
                             <Grid>
                                 <TextBlock VerticalAlignment="Center" Text="Quit Dynamic Island" Foreground="{StaticResource RedBrush}"/>
